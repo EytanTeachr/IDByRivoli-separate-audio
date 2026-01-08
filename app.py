@@ -248,10 +248,12 @@ def run_demucs_thread(filepaths, original_filenames):
 
         print(f"Starting batch processing of {len(filepaths)} files...")
         
+        # Use Popen to read stdout/stderr
+        # We merge stderr into stdout to capture Demucs progress bars and logs in one stream
         process = subprocess.Popen(
             command, 
             stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
             text=True, 
             bufsize=1, 
             universal_newlines=True
@@ -259,19 +261,43 @@ def run_demucs_thread(filepaths, original_filenames):
 
         current_file_index = 0
         
-        while True:
-            line = process.stderr.readline()
-            if line == '' and process.poll() is not None:
-                break
-            if line:
-                print(line, end='')
-                if "Separating track" in line:
-                    current_file_index += 1
-                    job_status['current_file_idx'] = current_file_index
-                    job_status['current_filename'] = os.path.basename(filepaths[current_file_index-1])
-                    job_status['progress'] = int((current_file_index - 1) / len(filepaths) * 50) # 50% for separation, 50% for edits
+        # Read output line by line
+        for line in process.stdout:
+            print(line, end='') # Log to console
+            
+            # Detect new file start
+            if "Separating track" in line:
+                current_file_index += 1
+                job_status['current_file_idx'] = current_file_index
+                job_status['current_filename'] = os.path.basename(filepaths[current_file_index-1])
+                # Calculate base progress (start of this file's chunk)
+                # Phase 1 (Separation) is 0% to 50% total
+                chunk_size = 50 / len(filepaths)
+                job_status['progress'] = int((current_file_index - 1) * chunk_size)
+
+            # Try to parse tqdm progress bar (e.g. " 24%|...|")
+            # Demucs progress looks like: " 24%|████| 28/284 [00:03<...]"
+            elif "%|" in line:
+                try:
+                    # Extract number before %
+                    parts = line.split('%|')
+                    if len(parts) > 0:
+                        percent_part = parts[0].strip() # "24"
+                        # Handle potential garbage before number
+                        percent_val = int(re.search(r'(\d+)$', percent_part).group(1))
+                        
+                        # Add this file's progress to the global progress
+                        chunk_size = 50 / len(filepaths)
+                        current_file_base = (current_file_index - 1) * chunk_size
+                        
+                        # Add percentage of the chunk
+                        added_val = (percent_val / 100) * chunk_size
+                        job_status['progress'] = int(current_file_base + added_val)
+                except:
+                    pass
         
-        return_code = process.poll()
+        process.wait()
+        return_code = process.returncode
         
         if return_code != 0:
             job_status['state'] = 'error'
