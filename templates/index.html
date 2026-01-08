@@ -3,102 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Séparation de Source Audio MP3</title>
+    <title>Séparation de Source Audio MP3 - Bulk</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            text-align: center;
+            background-color: #f5f5f5;
+            color: #333;
         }
         h1 {
-            color: #333;
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
         }
         .container {
-            border: 2px dashed #ccc;
+            background-color: white;
             padding: 40px;
-            border-radius: 10px;
-            background-color: #f9f9f9;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #3498db;
+            padding: 40px;
+            text-align: center;
+            border-radius: 8px;
+            background-color: #f0f8ff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-area:hover {
+            background-color: #e1f0fa;
         }
         input[type="file"] {
-            margin: 20px 0;
+            display: none;
+        }
+        .file-label {
+            font-size: 1.2em;
+            color: #3498db;
+            cursor: pointer;
         }
         button {
-            background-color: #4CAF50;
+            background-color: #2ecc71;
             color: white;
-            padding: 14px 20px;
-            margin: 8px 0;
+            padding: 15px 30px;
+            margin-top: 20px;
             border: none;
             cursor: pointer;
-            border-radius: 4px;
-            font-size: 16px;
+            border-radius: 6px;
+            font-size: 18px;
+            width: 100%;
+            transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: #27ae60;
         }
-        .loading {
-            display: none;
-            margin-top: 20px;
-            color: #666;
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
         }
-        .results {
+        
+        .progress-container {
             margin-top: 30px;
             display: none;
-            text-align: left;
         }
-        .file-link {
-            display: block;
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #e9e9e9;
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background-color: #ecf0f1;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #3498db;
+            width: 0%;
+            transition: width 0.5s ease;
+            text-align: center;
+            line-height: 25px;
+            color: white;
+            font-size: 14px;
+        }
+        .status-text {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .results {
+            margin-top: 40px;
+            display: none;
+        }
+        .result-item {
+            background-color: white;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .result-name {
+            font-weight: bold;
+        }
+        .download-links a {
+            display: inline-block;
+            padding: 8px 15px;
             text-decoration: none;
-            color: #333;
-            border-radius: 5px;
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-left: 10px;
         }
-        .file-link:hover {
-            background-color: #ddd;
+        .btn-vocal { background-color: #e74c3c; }
+        .btn-inst { background-color: #3498db; }
+        
+        #fileList {
+            margin-top: 20px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .file-entry {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
         }
     </style>
 </head>
 <body>
-    <h1>Séparation Acapella / Instrumental</h1>
+    <h1>Séparation Audio MP3 (Vocals/Instrumental)</h1>
     
     <div class="container">
         <form id="uploadForm" enctype="multipart/form-data">
-            <input type="file" name="file" accept=".mp3" required>
-            <br>
-            <button type="submit">Séparer les pistes</button>
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <label for="fileInput" class="file-label">
+                    📁 Cliquez ici pour sélectionner vos fichiers MP3
+                    <br><span style="font-size: 0.8em; color: #7f8c8d;">(Sélection multiple autorisée, jusqu'à 100 fichiers)</span>
+                </label>
+                <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple required onchange="updateFileList()">
+            </div>
+            
+            <div id="fileList"></div>
+
+            <button type="submit" id="submitBtn">Lancer la séparation</button>
         </form>
 
-        <div id="loading" class="loading">
-            Traitement en cours... Cela peut prendre quelques minutes.
+        <div id="progressContainer" class="progress-container">
+            <h3>Traitement en cours...</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill">0%</div>
+            </div>
+            <p id="statusText" class="status-text">Initialisation...</p>
         </div>
     </div>
 
     <div id="results" class="results">
-        <h2>Résultats :</h2>
-        <div id="links"></div>
+        <h2>Fichiers Traités</h2>
+        <div id="resultsList"></div>
     </div>
 
     <script>
+        function updateFileList() {
+            const input = document.getElementById('fileInput');
+            const list = document.getElementById('fileList');
+            list.innerHTML = '';
+            
+            if (input.files.length > 0) {
+                const count = document.createElement('div');
+                count.style.fontWeight = 'bold';
+                count.style.marginBottom = '10px';
+                count.textContent = `${input.files.length} fichier(s) sélectionné(s)`;
+                list.appendChild(count);
+
+                for (let i = 0; i < input.files.length; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'file-entry';
+                    div.textContent = input.files[i].name;
+                    list.appendChild(div);
+                }
+            }
+        }
+
+        let pollingInterval;
+
         document.getElementById('uploadForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const fileInput = document.querySelector('input[type="file"]');
+            const fileInput = document.getElementById('fileInput');
             if (fileInput.files.length === 0) {
-                alert('Veuillez sélectionner un fichier.');
+                alert('Veuillez sélectionner au moins un fichier.');
                 return;
             }
 
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files[]', fileInput.files[i]);
+            }
 
-            document.getElementById('loading').style.display = 'block';
+            document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('results').style.display = 'none';
-            document.querySelector('button').disabled = true;
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('statusText').textContent = "Upload des fichiers...";
 
             try {
+                // Upload files
                 const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
@@ -106,47 +217,81 @@
 
                 const data = await response.json();
                 
-                if (data.error) {
-                    alert('Erreur: ' + data.error);
-                } else {
-                    const linksDiv = document.getElementById('links');
-                    linksDiv.innerHTML = '';
-                    
-                    if (data.vocals) {
-                        const vocabLink = document.createElement('a');
-                        vocabLink.href = data.vocals;
-                        vocabLink.className = 'file-link';
-                        vocabLink.download = '';
-                        vocabLink.textContent = 'Télécharger Acapella (Vocals)';
-                        linksDiv.appendChild(vocabLink);
-                    }
-                    
-                    if (data.no_vocals) {
-                        const instLink = document.createElement('a');
-                        instLink.href = data.no_vocals;
-                        instLink.className = 'file-link';
-                        instLink.download = '';
-                        instLink.textContent = 'Télécharger Instrumental (Sans voix)';
-                        linksDiv.appendChild(instLink);
-                    }
-
-                    // Handle other stems if any
-                    for (const [key, value] of Object.entries(data)) {
-                        if (key !== 'vocals' && key !== 'no_vocals' && key !== 'original' && !key.startsWith('error')) {
-                             // Optional: display other stems
-                        }
-                    }
-                    
-                    document.getElementById('results').style.display = 'block';
+                if (response.status !== 200) {
+                    throw new Error(data.error || 'Erreur upload');
                 }
+
+                // Start polling for status
+                startPolling();
+
             } catch (error) {
                 console.error(error);
-                alert('Une erreur est survenue lors du traitement.');
-            } finally {
-                document.getElementById('loading').style.display = 'none';
-                document.querySelector('button').disabled = false;
+                alert('Erreur: ' + error.message);
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('progressContainer').style.display = 'none';
             }
         });
+
+        function startPolling() {
+            pollingInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/status');
+                    const status = await res.json();
+
+                    const progressFill = document.getElementById('progressFill');
+                    const statusText = document.getElementById('statusText');
+
+                    if (status.state === 'processing') {
+                        const percent = status.progress;
+                        progressFill.style.width = percent + '%';
+                        progressFill.textContent = percent + '%';
+                        
+                        let msg = `Traitement du fichier ${status.current_file_idx} / ${status.total_files}`;
+                        if (status.current_filename) {
+                            msg += ` (${status.current_filename})`;
+                        }
+                        statusText.textContent = msg;
+                    } 
+                    else if (status.state === 'completed') {
+                        clearInterval(pollingInterval);
+                        progressFill.style.width = '100%';
+                        progressFill.textContent = '100%';
+                        statusText.textContent = "Terminé !";
+                        displayResults(status.results);
+                        document.getElementById('submitBtn').disabled = false;
+                    }
+                    else if (status.state === 'error') {
+                        clearInterval(pollingInterval);
+                        statusText.textContent = "Erreur : " + status.error;
+                        statusText.style.color = 'red';
+                        document.getElementById('submitBtn').disabled = false;
+                    }
+                } catch (e) {
+                    console.error("Polling error", e);
+                }
+            }, 1000);
+        }
+
+        function displayResults(results) {
+            const list = document.getElementById('resultsList');
+            list.innerHTML = '';
+            
+            results.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                
+                div.innerHTML = `
+                    <div class="result-name">${item.original}</div>
+                    <div class="download-links">
+                        <a href="${item.instrumental}" class="btn-inst" download>⬇ Instrumental</a>
+                        <a href="${item.vocals}" class="btn-vocal" download>⬇ Voix</a>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            
+            document.getElementById('results').style.display = 'block';
+        }
     </script>
 </body>
 </html>
