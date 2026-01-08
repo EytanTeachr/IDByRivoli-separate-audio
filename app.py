@@ -37,14 +37,17 @@ def upload_file():
             shutil.rmtree(output_path)
 
         # Run demucs
-        # --two-stems=vocals separates into 'vocals' and 'no_vocals' (instrumental)
-        # -n htdemucs specifies the model (hybrid transformer)
-        # --mp3 saves output as MP3
+        # Options optimized for Quality and Speed on local machine:
+        # -n htdemucs: High quality Hybrid Transformer model (industry standard)
+        # --mp3-bitrate 320: Max MP3 quality to avoid compression artifacts
+        # -j 4: Use 4 parallel threads for faster processing (CPU optimization)
         command = [
             'python3', '-m', 'demucs',
             '--two-stems=vocals',
             '-n', 'htdemucs',
             '--mp3',
+            '--mp3-bitrate', '320',
+            '-j', '4',
             '-o', OUTPUT_FOLDER,
             filepath
         ]
