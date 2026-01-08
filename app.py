@@ -412,7 +412,14 @@ def status():
 
 @app.route('/download_processed/<path:filename>')
 def download_processed(filename):
-    return send_from_directory(PROCESSED_FOLDER, filename, as_attachment=True)
+    # Ensure correct MIME types are sent so browser downloads as audio, not HTML/Text
+    # Force attachment to ensure download prompt
+    return send_from_directory(
+        PROCESSED_FOLDER, 
+        filename, 
+        as_attachment=True,
+        mimetype='audio/mpeg' if filename.lower().endswith('.mp3') else 'audio/wav'
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
