@@ -83,4 +83,5 @@ def download_file(filename):
     return send_from_directory(os.path.join(OUTPUT_FOLDER, 'htdemucs'), filename, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Port 5001 pour éviter les conflits avec AirPlay sur Mac (qui utilise souvent le port 5000)
+    app.run(host='0.0.0.0', port=5001, debug=True)
