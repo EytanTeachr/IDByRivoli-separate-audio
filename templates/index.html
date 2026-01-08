@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Séparation de Source Audio MP3 - Bulk</title>
+    <title>ID By Rivoli - Audio Processor</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -26,7 +26,7 @@
         }
         .upload-area {
             border: 2px dashed #3498db;
-            padding: 40px;
+            padding: 60px;
             text-align: center;
             border-radius: 8px;
             background-color: #f0f8ff;
@@ -40,9 +40,10 @@
             display: none;
         }
         .file-label {
-            font-size: 1.2em;
+            font-size: 1.4em;
             color: #3498db;
             cursor: pointer;
+            font-weight: bold;
         }
         button {
             background-color: #2ecc71;
@@ -70,7 +71,7 @@
         }
         .progress-bar {
             width: 100%;
-            height: 25px;
+            height: 30px;
             background-color: #ecf0f1;
             border-radius: 15px;
             overflow: hidden;
@@ -82,44 +83,65 @@
             width: 0%;
             transition: width 0.5s ease;
             text-align: center;
-            line-height: 25px;
+            line-height: 30px;
             color: white;
             font-size: 14px;
+            font-weight: bold;
         }
         .status-text {
             text-align: center;
             color: #7f8c8d;
             font-style: italic;
+            font-size: 1.1em;
         }
 
         .results {
             margin-top: 40px;
             display: none;
         }
-        .result-item {
+        .track-block {
             background-color: white;
             border: 1px solid #ddd;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .track-header {
+            background-color: #34495e;
+            color: white;
             padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 6px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .edits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 10px;
+            padding: 15px;
+        }
+        .edit-item {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .result-name {
-            font-weight: bold;
+        .edit-name {
+            font-weight: 500;
+            font-size: 0.9em;
         }
-        .download-links a {
-            display: inline-block;
-            padding: 8px 15px;
+        .download-btn {
             text-decoration: none;
-            color: white;
+            padding: 4px 8px;
             border-radius: 4px;
-            font-size: 14px;
-            margin-left: 10px;
+            font-size: 0.8em;
+            margin-left: 5px;
+            color: white;
         }
-        .btn-vocal { background-color: #e74c3c; }
-        .btn-inst { background-color: #3498db; }
+        .dl-mp3 { background-color: #e67e22; }
+        .dl-wav { background-color: #9b59b6; }
         
         #fileList {
             margin-top: 20px;
@@ -127,28 +149,24 @@
             max-height: 200px;
             overflow-y: auto;
         }
-        .file-entry {
-            padding: 5px;
-            border-bottom: 1px solid #eee;
-        }
     </style>
 </head>
 <body>
-    <h1>Séparation Audio MP3 (Vocals/Instrumental)</h1>
+    <h1>ID By Rivoli - Audio Processor</h1>
     
     <div class="container">
         <form id="uploadForm" enctype="multipart/form-data">
             <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                 <label for="fileInput" class="file-label">
-                    📁 Cliquez ici pour sélectionner vos fichiers MP3
-                    <br><span style="font-size: 0.8em; color: #7f8c8d;">(Sélection multiple autorisée, jusqu'à 100 fichiers)</span>
+                    📁 DRAG & DROP ou CLIQUEZ ICI
+                    <br><span style="font-size: 0.7em; color: #7f8c8d; font-weight: normal;">(Jusqu'à 100 fichiers MP3)</span>
                 </label>
                 <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple required onchange="updateFileList()">
             </div>
             
             <div id="fileList"></div>
 
-            <button type="submit" id="submitBtn">Lancer la séparation</button>
+            <button type="submit" id="submitBtn">Lancer le Traitement (Séparation + Edits)</button>
         </form>
 
         <div id="progressContainer" class="progress-container">
@@ -161,7 +179,7 @@
     </div>
 
     <div id="results" class="results">
-        <h2>Fichiers Traités</h2>
+        <h2>Résultats</h2>
         <div id="resultsList"></div>
     </div>
 
@@ -177,13 +195,6 @@
                 count.style.marginBottom = '10px';
                 count.textContent = `${input.files.length} fichier(s) sélectionné(s)`;
                 list.appendChild(count);
-
-                for (let i = 0; i < input.files.length; i++) {
-                    const div = document.createElement('div');
-                    div.className = 'file-entry';
-                    div.textContent = input.files[i].name;
-                    list.appendChild(div);
-                }
             }
         }
 
@@ -209,7 +220,6 @@
             document.getElementById('statusText').textContent = "Upload des fichiers...";
 
             try {
-                // Upload files
                 const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
@@ -221,7 +231,6 @@
                     throw new Error(data.error || 'Erreur upload');
                 }
 
-                // Start polling for status
                 startPolling();
 
             } catch (error) {
@@ -246,11 +255,12 @@
                         progressFill.style.width = percent + '%';
                         progressFill.textContent = percent + '%';
                         
-                        let msg = `Traitement du fichier ${status.current_file_idx} / ${status.total_files}`;
-                        if (status.current_filename) {
-                            msg += ` (${status.current_filename})`;
+                        // Show different message for phase 1 (Demucs) vs phase 2 (Edits)
+                        if (percent < 50) {
+                            statusText.textContent = `Séparation Audio (IA): ${status.current_file_idx} / ${status.total_files}`;
+                        } else {
+                            statusText.textContent = `Génération des Edits (Cutting/Merging): ${status.current_file_idx} / ${status.total_files}`;
                         }
-                        statusText.textContent = msg;
                     } 
                     else if (status.state === 'completed') {
                         clearInterval(pollingInterval);
@@ -276,18 +286,31 @@
             const list = document.getElementById('resultsList');
             list.innerHTML = '';
             
-            results.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'result-item';
+            results.forEach(track => {
+                const block = document.createElement('div');
+                block.className = 'track-block';
                 
-                div.innerHTML = `
-                    <div class="result-name">${item.original}</div>
-                    <div class="download-links">
-                        <a href="${item.instrumental}" class="btn-inst" download>⬇ Instrumental</a>
-                        <a href="${item.vocals}" class="btn-vocal" download>⬇ Voix</a>
-                    </div>
+                let editsHtml = '<div class="edits-grid">';
+                track.edits.forEach(edit => {
+                    // Extract just the suffix/type from the full name for cleaner display if needed
+                    // But user asked for strict naming, so showing full name is safer
+                    editsHtml += `
+                        <div class="edit-item">
+                            <span class="edit-name">${edit.name}</span>
+                            <div>
+                                <a href="${edit.mp3}" class="download-btn dl-mp3" download>MP3</a>
+                                <a href="${edit.wav}" class="download-btn dl-wav" download>WAV</a>
+                            </div>
+                        </div>
+                    `;
+                });
+                editsHtml += '</div>';
+
+                block.innerHTML = `
+                    <div class="track-header">${track.original}</div>
+                    ${editsHtml}
                 `;
-                list.appendChild(div);
+                list.appendChild(block);
             });
             
             document.getElementById('results').style.display = 'block';

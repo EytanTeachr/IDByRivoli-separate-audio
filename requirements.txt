@@ -1,2 +1,8 @@
 flask
 demucs
+mutagen
+pydub
+numpy
+librosa
+scipy
+soundfile
