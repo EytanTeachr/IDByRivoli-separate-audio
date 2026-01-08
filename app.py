@@ -111,7 +111,16 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     # Use librosa for BPM detection on the original track
     y, sr = librosa.load(original_path, duration=60) # Analyze first 60s
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = round(tempo)
+    
+    # Handle scalar or array return from beat_track (librosa versions vary)
+    # beat_track can return a scalar or an array depending on version/inputs
+    if hasattr(tempo, 'item'):
+         bpm = round(tempo.item())
+    elif isinstance(tempo, np.ndarray):
+        bpm = round(float(tempo[0])) if tempo.size > 0 else 120
+    else:
+        bpm = round(tempo)
+        
     print(f"Detected BPM: {bpm}")
     
     # Calculate duration of 1 beat in ms
