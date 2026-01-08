@@ -51,11 +51,16 @@ def upload_file():
         
         try:
             print(f"Running command: {' '.join(command)}")
-            result = subprocess.run(command, capture_output=True, text=True)
-            
-            if result.returncode != 0:
-                print(f"Demucs failed: {result.stderr}")
-                return jsonify({'error': f'Erreur lors du traitement: {result.stderr}'}), 500
+            # On utilise Popen pour afficher la sortie en temps réel dans le terminal
+            with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True) as p:
+                # Afficher la sortie standard et d'erreur en temps réel
+                for line in p.stderr:
+                    print(line, end='') 
+                
+                p.wait()
+                if p.returncode != 0:
+                     print(f"Demucs failed with return code {p.returncode}")
+                     return jsonify({'error': 'Erreur lors du traitement'}), 500
             
             # The output files should be in output/htdemucs/{track_name}/
             # vocals.mp3 and no_vocals.mp3
