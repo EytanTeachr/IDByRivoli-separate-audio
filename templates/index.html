@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Séparation de Source Audio MP3</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            border-radius: 10px;
+            background-color: #f9f9f9;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 14px 20px;
+            margin: 8px 0;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            color: #666;
+        }
+        .results {
+            margin-top: 30px;
+            display: none;
+            text-align: left;
+        }
+        .file-link {
+            display: block;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e9e9e9;
+            text-decoration: none;
+            color: #333;
+            border-radius: 5px;
+        }
+        .file-link:hover {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Séparation Acapella / Instrumental</h1>
+    
+    <div class="container">
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".mp3" required>
+            <br>
+            <button type="submit">Séparer les pistes</button>
+        </form>
+
+        <div id="loading" class="loading">
+            Traitement en cours... Cela peut prendre quelques minutes.
+        </div>
+    </div>
+
+    <div id="results" class="results">
+        <h2>Résultats :</h2>
+        <div id="links"></div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.querySelector('input[type="file"]');
+            if (fileInput.files.length === 0) {
+                alert('Veuillez sélectionner un fichier.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.querySelector('button').disabled = true;
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Erreur: ' + data.error);
+                } else {
+                    const linksDiv = document.getElementById('links');
+                    linksDiv.innerHTML = '';
+                    
+                    if (data.vocals) {
+                        const vocabLink = document.createElement('a');
+                        vocabLink.href = data.vocals;
+                        vocabLink.className = 'file-link';
+                        vocabLink.download = '';
+                        vocabLink.textContent = 'Télécharger Acapella (Vocals)';
+                        linksDiv.appendChild(vocabLink);
+                    }
+                    
+                    if (data.no_vocals) {
+                        const instLink = document.createElement('a');
+                        instLink.href = data.no_vocals;
+                        instLink.className = 'file-link';
+                        instLink.download = '';
+                        instLink.textContent = 'Télécharger Instrumental (Sans voix)';
+                        linksDiv.appendChild(instLink);
+                    }
+
+                    // Handle other stems if any
+                    for (const [key, value] of Object.entries(data)) {
+                        if (key !== 'vocals' && key !== 'no_vocals' && key !== 'original' && !key.startsWith('error')) {
+                             // Optional: display other stems
+                        }
+                    }
+                    
+                    document.getElementById('results').style.display = 'block';
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Une erreur est survenue lors du traitement.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('button').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
