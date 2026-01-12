@@ -37,179 +37,213 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5; /* Or change to black #000 for dark mode */
-            color: #111;
+            background-color: #000000; /* Dark Mode ID By Rivoli style */
+            color: #ffffff;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 40px 40px;
         }
         h1 {
-            color: #000;
+            color: #ffffff;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
             text-transform: uppercase;
             font-weight: 700;
-            letter-spacing: -1px;
+            letter-spacing: 2px;
+            font-size: 3em;
+            margin-top: 40px;
         }
         .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 0; /* Minimalist: sharp corners */
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            border: 1px solid #eee;
+            background-color: #0a0a0a;
+            padding: 50px;
+            border-radius: 0;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
+            max-width: 800px;
+            margin: 0 auto;
         }
         .upload-area {
-            border: 2px dashed #000;
-            padding: 60px;
+            border: 2px dashed #444;
+            padding: 80px;
             text-align: center;
             border-radius: 0;
-            background-color: #fff;
+            background-color: #111;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         .upload-area:hover {
-            background-color: #f8f8f8;
-            border-color: #333;
+            background-color: #1a1a1a;
+            border-color: #fff;
+            box-shadow: 0 0 30px rgba(255,255,255,0.05);
         }
         input[type="file"] {
             display: none;
         }
         .file-label {
-            font-size: 1.4em;
-            color: #000;
+            font-size: 1.2em;
+            color: #fff;
             cursor: pointer;
             font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+        }
+        .file-sublabel {
+            font-size: 0.8em; 
+            color: #666; 
+            font-weight: 400; 
+            margin-top: 10px; 
+            display: block;
         }
         button {
-            background-color: #000;
-            color: white;
-            padding: 18px 30px;
-            margin-top: 20px;
-            border: none;
+            background-color: #ffffff;
+            color: #000000;
+            padding: 20px 40px;
+            margin-top: 30px;
+            border: 1px solid #fff;
             cursor: pointer;
             border-radius: 0;
+            font-family: 'ClashGrotesk', sans-serif; /* Explicit font for button */
             font-size: 16px;
             width: 100%;
             text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 1px;
-            transition: background-color 0.3s;
+            font-weight: 700;
+            letter-spacing: 2px;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
         }
         button:hover {
-            background-color: #333;
+            background-color: #000000;
+            color: #ffffff;
+            letter-spacing: 3px;
         }
         button:disabled {
-            background-color: #ccc;
+            background-color: #333;
+            color: #666;
+            border-color: #333;
             cursor: not-allowed;
+            letter-spacing: 2px;
         }
         
         .progress-container {
-            margin-top: 30px;
+            margin-top: 40px;
             display: none;
         }
         .progress-bar {
             width: 100%;
-            height: 4px; /* Thinner minimalist bar */
-            background-color: #eee;
+            height: 2px;
+            background-color: #333;
             border-radius: 0;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         .progress-fill {
             height: 100%;
-            background-color: #000;
+            background-color: #fff;
             width: 0%;
             transition: width 0.5s ease;
-            text-align: center;
-            line-height: 30px;
-            color: transparent; /* Hide text inside thin bar */
-            font-size: 14px;
-            font-weight: bold;
+            box-shadow: 0 0 10px #fff;
         }
         .status-text {
             text-align: center;
-            color: #666;
-            font-style: normal;
+            color: #888;
             font-size: 0.9em;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
             margin-top: 15px;
         }
 
         .results {
-            margin-top: 40px;
+            margin-top: 60px;
             display: none;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
         }
         .track-block {
-            background-color: white;
-            border: 1px solid #eee;
+            background-color: #0a0a0a;
+            border: 1px solid #333;
             margin-bottom: 20px;
             border-radius: 0;
             overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .track-block:hover {
+            border-color: #555;
         }
         .track-header {
-            background-color: #000;
+            background-color: #111;
             color: white;
-            padding: 15px;
-            font-size: 1em;
-            font-weight: 600;
+            padding: 20px;
+            font-size: 1.1em;
+            font-weight: 700;
             text-transform: uppercase;
+            border-bottom: 1px solid #222;
+            letter-spacing: 1px;
         }
         .edits-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 15px;
-            padding: 20px;
+            gap: 1px;
+            background-color: #222; /* Gap color */
+            padding: 1px;
         }
         .edit-item {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 0;
-            border: 1px solid #eee;
+            background-color: #0a0a0a;
+            padding: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: border-color 0.2s;
+            transition: background-color 0.2s;
         }
         .edit-item:hover {
-            border-color: #000;
+            background-color: #111;
         }
         .edit-name {
-            font-weight: 600;
+            font-weight: 500;
             font-size: 0.9em;
             text-transform: uppercase;
+            color: #ddd;
+            letter-spacing: 0.5px;
         }
         .download-btn {
             text-decoration: none;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 0;
             font-size: 0.75em;
-            margin-left: 5px;
-            color: white;
+            margin-left: 8px;
+            color: #000;
             text-transform: uppercase;
-            font-weight: 600;
+            font-weight: 700;
+            border: 1px solid #fff;
+            transition: all 0.2s;
         }
-        .dl-mp3 { background-color: #000; }
-        .dl-wav { background-color: #666; }
-        .dl-mp3:hover { background-color: #333; }
-        .dl-wav:hover { background-color: #888; }
+        .dl-mp3 { background-color: #fff; }
+        .dl-wav { background-color: transparent; color: #fff; }
+        
+        .dl-mp3:hover { background-color: #000; color: #fff; }
+        .dl-wav:hover { background-color: #fff; color: #000; }
         
         #fileList {
-            margin-top: 20px;
+            margin-top: 25px;
             text-align: left;
             max-height: 200px;
             overflow-y: auto;
-            border-top: 1px solid #eee;
-            padding-top: 10px;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+            color: #888;
+            font-size: 0.9em;
         }
 
         /* Rivoli Specific adjustments */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f1f1; 
+            background: #000; 
         }
         ::-webkit-scrollbar-thumb {
-            background: #888; 
+            background: #333; 
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #555; 
@@ -224,7 +258,7 @@
             <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
                 <label for="fileInput" class="file-label">
                     📁 DRAG & DROP ou CLIQUEZ ICI
-                    <br><span style="font-size: 0.7em; color: #7f8c8d; font-weight: normal;">(Jusqu'à 100 fichiers MP3)</span>
+                    <span class="file-sublabel">(Jusqu'à 100 fichiers MP3)</span>
                 </label>
                 <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple required onchange="updateFileList()">
             </div>
@@ -246,7 +280,7 @@
     <div id="results" class="results">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h2 style="margin:0;">Résultats</h2>
-            <a href="/download_all_zip" class="download-btn dl-mp3" style="font-size: 1.1em; padding: 10px 20px; background-color: #34495e;">
+            <a href="/download_all_zip" class="download-btn dl-mp3" style="font-size: 1.1em; padding: 15px 30px; background-color: #fff; color: #000; border: 1px solid #fff;">
                 📦 Tout Télécharger (.ZIP)
             </a>
         </div>
