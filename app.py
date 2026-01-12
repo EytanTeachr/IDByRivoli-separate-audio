@@ -4,7 +4,7 @@ import threading
 import shutil
 import time
 import re
-from flask import Flask, render_template, request, jsonify, send_from_directory, abort
+from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM
@@ -38,6 +38,45 @@ job_status = {
     'results': [],
     'error': None
 }
+
+import shutil
+import zipfile
+import io
+
+@app.route('/download_all_zip')
+def download_all_zip():
+    """
+    Creates a ZIP file containing all processed tracks and sends it to the user.
+    """
+    global job_status
+    
+    if job_status['state'] != 'completed' or not job_status['results']:
+        return jsonify({'error': 'Aucun traitement terminé à télécharger'}), 400
+
+    # Create an in-memory ZIP file
+    memory_file = io.BytesIO()
+    
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for result in job_status['results']:
+            track_name = result['original']
+            track_dir = os.path.join(PROCESSED_FOLDER, track_name)
+            
+            if os.path.exists(track_dir):
+                for root, dirs, files in os.walk(track_dir):
+                    for file in files:
+                        if file.endswith('.mp3'): 
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.join(track_name, file)
+                            zf.write(file_path, arcname)
+
+    memory_file.seek(0)
+    
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='ID_By_Rivoli_Edits_Pack.zip'
+    )
 
 def clean_filename(filename):
     """
