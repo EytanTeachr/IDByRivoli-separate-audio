@@ -5,63 +5,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ID By Rivoli - Audio Processor</title>
     <style>
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Variable.ttf') format('truetype');
+            font-weight: 200 700;
+            font-display: swap;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'ClashGrotesk', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
+            background-color: #f5f5f5; /* Or change to black #000 for dark mode */
+            color: #111;
         }
         h1 {
-            color: #2c3e50;
+            color: #000;
             text-align: center;
             margin-bottom: 30px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: -1px;
         }
         .container {
             background-color: white;
             padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 0; /* Minimalist: sharp corners */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            border: 1px solid #eee;
         }
         .upload-area {
-            border: 2px dashed #3498db;
+            border: 2px dashed #000;
             padding: 60px;
             text-align: center;
-            border-radius: 8px;
-            background-color: #f0f8ff;
+            border-radius: 0;
+            background-color: #fff;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
         }
         .upload-area:hover {
-            background-color: #e1f0fa;
+            background-color: #f8f8f8;
+            border-color: #333;
         }
         input[type="file"] {
             display: none;
         }
         .file-label {
             font-size: 1.4em;
-            color: #3498db;
+            color: #000;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 600;
+            text-transform: uppercase;
         }
         button {
-            background-color: #2ecc71;
+            background-color: #000;
             color: white;
-            padding: 15px 30px;
+            padding: 18px 30px;
             margin-top: 20px;
             border: none;
             cursor: pointer;
-            border-radius: 6px;
-            font-size: 18px;
+            border-radius: 0;
+            font-size: 16px;
             width: 100%;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 1px;
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #27ae60;
+            background-color: #333;
         }
         button:disabled {
-            background-color: #bdc3c7;
+            background-color: #ccc;
             cursor: not-allowed;
         }
         
@@ -71,28 +87,31 @@
         }
         .progress-bar {
             width: 100%;
-            height: 30px;
-            background-color: #ecf0f1;
-            border-radius: 15px;
+            height: 4px; /* Thinner minimalist bar */
+            background-color: #eee;
+            border-radius: 0;
             overflow: hidden;
             margin-bottom: 10px;
         }
         .progress-fill {
             height: 100%;
-            background-color: #3498db;
+            background-color: #000;
             width: 0%;
             transition: width 0.5s ease;
             text-align: center;
             line-height: 30px;
-            color: white;
+            color: transparent; /* Hide text inside thin bar */
             font-size: 14px;
             font-weight: bold;
         }
         .status-text {
             text-align: center;
-            color: #7f8c8d;
-            font-style: italic;
-            font-size: 1.1em;
+            color: #666;
+            font-style: normal;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 15px;
         }
 
         .results {
@@ -101,53 +120,79 @@
         }
         .track-block {
             background-color: white;
-            border: 1px solid #ddd;
+            border: 1px solid #eee;
             margin-bottom: 20px;
-            border-radius: 8px;
+            border-radius: 0;
             overflow: hidden;
         }
         .track-header {
-            background-color: #34495e;
+            background-color: #000;
             color: white;
             padding: 15px;
-            font-size: 1.2em;
-            font-weight: bold;
+            font-size: 1em;
+            font-weight: 600;
+            text-transform: uppercase;
         }
         .edits-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 10px;
-            padding: 15px;
+            gap: 15px;
+            padding: 20px;
         }
         .edit-item {
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 4px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 0;
             border: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: border-color 0.2s;
+        }
+        .edit-item:hover {
+            border-color: #000;
         }
         .edit-name {
-            font-weight: 500;
+            font-weight: 600;
             font-size: 0.9em;
+            text-transform: uppercase;
         }
         .download-btn {
             text-decoration: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
+            padding: 6px 12px;
+            border-radius: 0;
+            font-size: 0.75em;
             margin-left: 5px;
             color: white;
+            text-transform: uppercase;
+            font-weight: 600;
         }
-        .dl-mp3 { background-color: #e67e22; }
-        .dl-wav { background-color: #9b59b6; }
+        .dl-mp3 { background-color: #000; }
+        .dl-wav { background-color: #666; }
+        .dl-mp3:hover { background-color: #333; }
+        .dl-wav:hover { background-color: #888; }
         
         #fileList {
             margin-top: 20px;
             text-align: left;
             max-height: 200px;
             overflow-y: auto;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        /* Rivoli Specific adjustments */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555; 
         }
     </style>
 </head>
