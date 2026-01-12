@@ -222,6 +222,11 @@ def run_demucs_thread(filepaths, original_filenames):
         
         for i, filepath in enumerate(filepaths):
             filename = os.path.basename(filepath)
+            
+            # Update status for current file
+            job_status['current_file_idx'] = i + 1
+            job_status['current_filename'] = filename
+            
             track_name = os.path.splitext(filename)[0]
             
             source_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)

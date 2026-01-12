@@ -439,11 +439,13 @@
                         progressFill.style.width = percent + '%';
                         progressFill.textContent = percent + '%';
                         
-                        // Show different message for phase 1 (Demucs) vs phase 2 (Edits)
+                        // Show detailed message including current filename
+                        const currentFile = status.current_filename || '...';
+                        
                         if (percent < 50) {
-                            statusText.textContent = `Séparation Audio (IA): ${status.current_file_idx} / ${status.total_files}`;
+                            statusText.textContent = `Séparation Audio (IA) : ${currentFile} (${status.current_file_idx} / ${status.total_files})`;
                         } else {
-                            statusText.textContent = `Génération des Edits (Cutting/Merging): ${status.current_file_idx} / ${status.total_files}`;
+                            statusText.textContent = `Génération des Edits : ${currentFile} (${status.current_file_idx} / ${status.total_files})`;
                         }
                     } 
                     else if (status.state === 'completed') {
