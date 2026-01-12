@@ -354,7 +354,7 @@
 
         let pollingInterval;
 
-        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            document.getElementById('uploadForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const fileInput = document.getElementById('fileInput');
@@ -363,36 +363,65 @@
                 return;
             }
 
+            // --- IMPROVED UPLOAD LOGIC START ---
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
+            
+            const progressBar = document.getElementById('progressFill');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = "Préparation de l'upload...";
+
             const formData = new FormData();
             for (let i = 0; i < fileInput.files.length; i++) {
                 formData.append('files[]', fileInput.files[i]);
             }
 
-            document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('results').style.display = 'none';
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('statusText').textContent = "Upload des fichiers...";
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-                
-                if (response.status !== 200) {
-                    throw new Error(data.error || 'Erreur upload');
+            // Track Upload Progress
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    const loadedMB = (e.loaded / (1024 * 1024)).toFixed(2);
+                    const totalMB = (e.total / (1024 * 1024)).toFixed(2);
+                    
+                    progressBar.style.width = percentComplete + '%';
+                    
+                    // Show detailed upload stats
+                    statusText.textContent = `UPLOAD EN COURS : ${Math.round(percentComplete)}% (${loadedMB} MB / ${totalMB} MB)`;
                 }
+            };
 
-                startPolling();
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    // Upload finished, start processing polling
+                    statusText.textContent = "Upload terminé. Démarrage du traitement IA...";
+                    startPolling();
+                } else {
+                    let errorMessage = 'Erreur upload';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        errorMessage = response.error || errorMessage;
+                    } catch(e) {}
+                    
+                    console.error("Upload error:", errorMessage);
+                    alert('Erreur: ' + errorMessage);
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('progressContainer').style.display = 'none';
+                }
+            };
 
-            } catch (error) {
-                console.error(error);
-                alert('Erreur: ' + error.message);
+            xhr.onerror = function() {
+                alert('Erreur réseau lors de l\'upload.');
                 document.getElementById('submitBtn').disabled = false;
                 document.getElementById('progressContainer').style.display = 'none';
-            }
+            };
+
+            xhr.send(formData);
+            // --- IMPROVED UPLOAD LOGIC END ---
         });
 
         function startPolling() {

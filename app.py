@@ -157,58 +157,61 @@ def run_demucs_thread(filepaths, original_filenames):
         job_status['results'] = []
         job_status['progress'] = 0
 
-        command = [
-            'python3', '-m', 'demucs',
-            '--two-stems=vocals',
-            '-n', 'htdemucs',
-            '--mp3',
-            '--mp3-bitrate', '320',
-            '-j', '4', 
-            '-o', OUTPUT_FOLDER
-        ] + filepaths
-
-        print(f"Starting batch processing of {len(filepaths)} files...")
-        
-        process = subprocess.Popen(
-            command, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            text=True, 
-            bufsize=1, 
-            universal_newlines=True
-        )
-
-        current_file_index = 0
-        
-        for line in process.stdout:
-            print(line, end='')
+        for i in range(0, len(filepaths), 50):
+            chunk = filepaths[i:i + 50]
             
-            if "Separating track" in line:
-                current_file_index += 1
-                job_status['current_file_idx'] = current_file_index
-                job_status['current_filename'] = os.path.basename(filepaths[current_file_index-1])
-                chunk_size = 50 / len(filepaths)
-                job_status['progress'] = int((current_file_index - 1) * chunk_size)
+            command = [
+                'python3', '-m', 'demucs',
+                '--two-stems=vocals',
+                '-n', 'htdemucs',
+                '--mp3',
+                '--mp3-bitrate', '320',
+                '-j', '4', 
+                '-o', OUTPUT_FOLDER
+            ] + chunk
 
-            elif "%|" in line:
-                try:
-                    parts = line.split('%|')
-                    if len(parts) > 0:
-                        percent_part = parts[0].strip()
-                        percent_val = int(re.search(r'(\d+)$', percent_part).group(1))
-                        chunk_size = 50 / len(filepaths)
-                        current_file_base = (current_file_index - 1) * chunk_size
-                        added_val = (percent_val / 100) * chunk_size
-                        job_status['progress'] = int(current_file_base + added_val)
-                except:
-                    pass
-        
-        process.wait()
-        
-        if process.returncode != 0:
-            job_status['state'] = 'error'
-            job_status['error'] = 'Erreur lors du traitement Demucs'
-            return
+            print(f"Starting batch processing of chunk {i//50 + 1}/{len(filepaths)//50 + 1}...")
+            
+            process = subprocess.Popen(
+                command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT, 
+                text=True, 
+                bufsize=1, 
+                universal_newlines=True
+            )
+
+            current_chunk_base = i
+
+            for line in process.stdout:
+                print(line, end='')
+                
+                if "Separating track" in line:
+                    current_file_index += 1
+                    job_status['current_file_idx'] = current_file_index
+                    job_status['current_filename'] = os.path.basename(filepaths[current_file_index-1])
+                    chunk_size = 50 / len(filepaths)
+                    job_status['progress'] = int((current_file_index - 1) * chunk_size)
+
+                elif "%|" in line:
+                    try:
+                        parts = line.split('%|')
+                        if len(parts) > 0:
+                            percent_part = parts[0].strip()
+                            percent_val = int(re.search(r'(\d+)$', percent_part).group(1))
+                            chunk_size = 50 / len(filepaths)
+                            current_file_base = (current_file_index - 1) * chunk_size
+                            added_val = (percent_val / 100) * chunk_size
+                            job_status['progress'] = int(current_file_base + added_val)
+                    except:
+                        pass
+            
+            process.wait()
+            
+            if process.returncode != 0:
+                job_status['state'] = 'error'
+                job_status['error'] = 'Erreur lors du traitement Demucs'
+                return
 
         print("Starting Edit Generation Phase...")
         job_status['progress'] = 50
