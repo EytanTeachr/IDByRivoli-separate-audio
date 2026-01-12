@@ -323,6 +323,11 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         album = str(original_tags.get('TALB', '')).strip() if 'TALB' in original_tags else ''
         genre = str(original_tags.get('TCON', '')).strip() if 'TCON' in original_tags else ''
         
+        # ISRC extraction
+        isrc = ''
+        if 'TSRC' in original_tags:
+            isrc = str(original_tags['TSRC'].text[0]).strip() if original_tags['TSRC'].text else ''
+        
         # Date handling
         date_str = str(original_tags.get('TDRC', '')).strip() if 'TDRC' in original_tags else ''
         try:
@@ -345,6 +350,10 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         # Cover URL (absolute)
         cover_url = f"{PUBLIC_URL}/static/covers/Cover_Id_by_Rivoli.jpeg"
         
+        # Generate Track ID
+        filename_clean = edit_info.get('name', '').replace(' ', '_')
+        track_id = f"{isrc}_{filename_clean}" if isrc else filename_clean
+        
         # Prepare data structure
         track_data = {
             'Type': edit_info.get('type', ''),  # e.g., "Clap In", "Extended", etc.
@@ -361,7 +370,9 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
             'Date de sortie': date_sortie,
             'BPM': bpm,
             'Artiste original': artist,  # Same as Artiste for now
-            'Url': cover_url  # ABSOLUTE Cover URL
+            'Url': cover_url,  # ABSOLUTE Cover URL
+            'ISRC': isrc,  # ISRC from original
+            'TRACK_ID': track_id  # Custom Track ID
         }
         
         return track_data
