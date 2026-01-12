@@ -156,7 +156,7 @@
     
     <div class="container">
         <form id="uploadForm" enctype="multipart/form-data">
-            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
                 <label for="fileInput" class="file-label">
                     📁 DRAG & DROP ou CLIQUEZ ICI
                     <br><span style="font-size: 0.7em; color: #7f8c8d; font-weight: normal;">(Jusqu'à 100 fichiers MP3)</span>
@@ -195,6 +195,56 @@
                 count.style.marginBottom = '10px';
                 count.textContent = `${input.files.length} fichier(s) sélectionné(s)`;
                 list.appendChild(count);
+
+                // List individual files
+                for(let i=0; i<input.files.length; i++) {
+                    const item = document.createElement('div');
+                    item.textContent = `- ${input.files[i].name}`;
+                    list.appendChild(item);
+                }
+            }
+        }
+
+        // Drag and Drop Logic
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.style.backgroundColor = '#e1f0fa';
+            dropZone.style.borderColor = '#2980b9';
+        }
+
+        function unhighlight(e) {
+            dropZone.style.backgroundColor = '#f0f8ff';
+            dropZone.style.borderColor = '#3498db';
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                fileInput.files = files;
+                updateFileList();
             }
         }
 
