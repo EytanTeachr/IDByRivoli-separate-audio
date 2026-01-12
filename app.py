@@ -157,6 +157,8 @@ def run_demucs_thread(filepaths, original_filenames):
         job_status['results'] = []
         job_status['progress'] = 0
 
+        current_file_index = 0
+
         for i in range(0, len(filepaths), 50):
             chunk = filepaths[i:i + 50]
             
