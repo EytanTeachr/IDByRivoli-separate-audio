@@ -69,28 +69,17 @@ def update_metadata(filepath, artist, title):
     except Exception as e:
         print(f"Error updating metadata for {filepath}: {e}")
 
+import audio_processor
+
 def create_edits(vocals_path, inst_path, original_path, base_output_path, base_filename):
     print(f"Loading audio for edits: {base_filename}")
-    vocals = AudioSegment.from_mp3(vocals_path)
-    inst = AudioSegment.from_mp3(inst_path)
-    original = AudioSegment.from_mp3(original_path)
     
-    # Use librosa for BPM detection on the original track
-    y, sr = librosa.load(original_path, duration=60)
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    
-    if hasattr(tempo, 'item'):
-         bpm = round(tempo.item())
-    elif isinstance(tempo, np.ndarray):
-        bpm = round(float(tempo[0])) if tempo.size > 0 else 120
-    else:
-        bpm = round(tempo)
-        
+    # Detect BPM
+    bpm = audio_processor.detect_bpm(original_path)
     print(f"Detected BPM: {bpm}")
     
-    beat_ms = (60 / bpm) * 1000
-    ms_16_beats = 16 * beat_ms
-    ms_32_beats = 32 * beat_ms
+    # Generate edits using the new processor
+    generated_edits = audio_processor.process_track(vocals_path, inst_path, original_path, bpm)
     
     edits = []
 
@@ -107,79 +96,17 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         
         update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}")
         
-        # Determine the relative path for URL (subdirectory + filename)
-        # We need to URL encode the components to handle spaces safely
         subdir = clean_name
         
-        # Return URL-safe paths
-        # Note: We will decode these in the Flask route
         return {
             'name': f"{clean_name} {suffix}",
             'mp3': f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_mp3)}",
             'wav': f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_wav)}"
         }
 
-    # 1. Super Short
-    super_short = original[:ms_16_beats] + original[ms_32_beats:ms_32_beats*3]
-    edits.append(export_edit(super_short, "Super Short"))
-
-    # 2. Short
-    short = inst[:ms_32_beats] + original[ms_32_beats:ms_32_beats*4]
-    edits.append(export_edit(short, "Short"))
-
-    # 3. Acap Out
-    acap_out_segment = vocals[-ms_32_beats:]
-    acap_out = original + acap_out_segment
-    edits.append(export_edit(acap_out, "Acap Out"))
-
-    # 4. Acap In
-    acap_in = vocals[:ms_32_beats] + original[ms_32_beats:]
-    edits.append(export_edit(acap_in, "Acap In"))
-
-    # 5. Slam Intro Short Acap Out
-    slam_intro = original[0:500] 
-    slam_edit = slam_intro + short + acap_out_segment
-    edits.append(export_edit(slam_edit, "Slam Intro Short Acap Out"))
-
-    # 6. Clap In Short Acap Out
-    clap_in_edit = inst[:ms_16_beats] + short + acap_out_segment 
-    edits.append(export_edit(clap_in_edit, "Clap In Short Acap Out"))
-
-    # 7. Short Acap Out
-    short_acap_out = short + acap_out_segment
-    edits.append(export_edit(short_acap_out, "Short Acap Out"))
-
-    # 8. Slam Dirty Main
-    slam_main = slam_intro + original
-    edits.append(export_edit(slam_main, "Slam Dirty Main"))
-
-    # 9. Acap In Acap Out Main
-    acap_in_out_main = vocals[:ms_32_beats] + original + vocals[-ms_32_beats:]
-    edits.append(export_edit(acap_in_out_main, "Acap In Acap Out Main"))
-
-    # 10. Short Clap In
-    short_clap_in = inst[:ms_16_beats] + short
-    edits.append(export_edit(short_clap_in, "Short Clap In"))
-
-    # 11. Short Acap In
-    short_acap_in = vocals[:ms_32_beats] + short
-    edits.append(export_edit(short_acap_in, "Short Acap In"))
-
-    # 12. Short Main
-    edits.append(export_edit(short, "Short Main"))
-
-    # 13. Clap In Main
-    clap_in_main = inst[:ms_16_beats] + original
-    edits.append(export_edit(clap_in_main, "Clap In Main"))
-
-    # 14. Main
-    edits.append(export_edit(original, "Main"))
-
-    # 15. Instrumental
-    edits.append(export_edit(inst, "Instrumental"))
-    
-    # 16. Acapella
-    edits.append(export_edit(vocals, "Acapella"))
+    # Iterate over generated edits and export them
+    for suffix, segment in generated_edits:
+        edits.append(export_edit(segment, suffix))
 
     return edits
 
