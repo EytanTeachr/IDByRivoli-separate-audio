@@ -231,26 +231,23 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # Actually, if we crossfade, we hear claps fading out + vocals fading in.
     # User said "Coupe les claps". Maybe a fast fade out of claps?
     
-    # Revised approach for "Niquel":
+    # Revised approach for "Niquel" (Simplified Cut & Paste with Offset):
     # 1. Intro = 16 beats of (DropInst + Claps).
-    # 2. But at beat 16 (or slightly before), we switch to Original.
-    # If we switch at Beat 15, we lose the last clap?
-    # Let's switch at Beat 16 exactly, but using the Original's audio from Beat 16 (which is DropStart).
-    # Wait, if vocal is BEFORE Beat 16 (anacrouse of drop), we need to hear it.
-    # So we must switch to Original at Beat 15.5 or 15.
+    # 2. To avoid "inaudible mix" or phasing, we DO NOT crossfade the audio of the original.
+    # 3. We cut the Intro at 15 beats + 3 quarters (just before the last beat).
+    # 4. We start the Original at (DropStart - 1 beat).
+    # This allows the vocal pickup (anacrouse) to be heard clearly from the Original track without being muddied by the intro instrumental.
     
-    # Let's switch at Beat 15 (last beat of the intro bar).
-    # Intro: 15 beats of (DropInst + Claps).
-    # Then: Original starting from (DropStart - 1 beat).
-    # This preserves the vocal pickup (anacrouse) that happens in that last beat.
-    # And since Original has the instrumental, the music continuity is kept.
-    # The claps will stop at beat 15.
-    
+    # Let's take Intro up to beat 15.
     intro_15 = intro_with_claps[:(ms_16_beats - int(beat_ms))]
-    pickup_segment = original[max(0, drop_start - int(beat_ms)):]
     
-    # Smooth transition (short crossfade 50ms to avoid click, but keep timing tight)
-    clap_in = intro_15.append(pickup_segment, crossfade=50)
+    # Take original starting 1 beat before drop
+    original_pickup = original[max(0, drop_start - int(beat_ms)):]
+    
+    # Hard cut / Append (no crossfade to avoid phasing)
+    # The rhythm should be consistent: 15 beats intro + (1 beat pickup + Drop...)
+    # = 16 beats total before Drop starts. Perfect.
+    clap_in = intro_15 + original_pickup
     
     # Add Outro
     clap_in = clap_in + outro_inst
@@ -336,7 +333,8 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # Let's transition from intro_15 to Break Segment.
     
     # Crossfade into break?
-    short_clap_in = intro_15.append(break_segment, crossfade=50) + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    # Simplified: Hard append to break segment to avoid phasing issues.
+    short_clap_in = intro_15 + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
     
     edits.append(("Short Clap In", short_clap_in))
     
