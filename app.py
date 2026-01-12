@@ -152,7 +152,7 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         tags.add(TLEN(encoding=3, text=str(length_ms)))
         
         # Add ID By Rivoli comment
-        tags.add(COMM(encoding=3, lang='eng', desc='ID By Rivoli', text='https://idbyrivoli.com'))
+        tags.add(COMM(encoding=3, lang='eng', desc='ID By Rivoli', text='www.idbyrivoli.com'))
         
         # Add Artwork - ID By Rivoli Cover as PRIMARY
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
