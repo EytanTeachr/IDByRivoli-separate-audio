@@ -321,8 +321,23 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # 7. Short Clap In
     # "16 beats of claps only" -> Modified: Claps + Melody
     # "After clap intro, include only one break and one drop"
-    # Reuse clap_in_section (Claps + Drop Inst 16 beats)
-    short_clap_in = clap_in_section + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    # Reuse intro_15 (which is effectively the Clap In section up to beat 15)
+    # BUT we need to transition into the BREAK segment now, not the Drop directly.
+    # The Short edit structure is: Intro -> Break -> Drop.
+    # We should use the Clap Intro logic but transition into the Break.
+    
+    # However, 'intro_15' was built using Drop Instrumental.
+    # If we transition to Break, it might be jarring if the break is quiet.
+    # But usually Short Clap In means: Intro (DJ Tool) -> Breakdown -> Drop.
+    # So we use the same Clap In block.
+    
+    # We need to construct it carefully to match the "Clap In" logic (cut claps at end).
+    # Break usually starts quiet.
+    # Let's transition from intro_15 to Break Segment.
+    
+    # Crossfade into break?
+    short_clap_in = intro_15.append(break_segment, crossfade=50) + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    
     edits.append(("Short Clap In", short_clap_in))
     
     # 8. Acap In / Acap Out
