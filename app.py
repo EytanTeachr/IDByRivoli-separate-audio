@@ -152,10 +152,15 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         # 9. Publisher
         tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # 10. Custom Track ID: $ISRC_$filename (replace all dashes with underscores)
+        # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
         filename_base = os.path.splitext(os.path.basename(filepath))[0]
-        filename_clean = filename_base.replace('-', '_').replace(' ', '_')
+        # Replace dashes with spaces, then normalize spaces, then convert to underscores
+        filename_clean = filename_base.replace('-', ' ').replace('_', ' ')
+        filename_clean = re.sub(r'\s+', ' ', filename_clean).strip()  # Multiple spaces -> single space
+        filename_clean = filename_clean.replace(' ', '_')  # Spaces -> underscores
+        filename_clean = re.sub(r'_+', '_', filename_clean)  # Multiple underscores -> single underscore
+        
         track_id = f"{isrc_value}_{filename_clean}" if isrc_value else filename_clean
         tags.add(TXXX(encoding=3, desc='TRACK_ID', text=track_id))
         
@@ -351,8 +356,13 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         # Cover URL (absolute)
         cover_url = f"{PUBLIC_URL}/static/covers/Cover_Id_by_Rivoli.jpeg"
         
-        # Generate Track ID (replace spaces and dashes with underscores)
-        filename_clean = edit_info.get('name', '').replace(' ', '_').replace('-', '_')
+        # Generate Track ID (clean format: no dashes, single underscores only)
+        filename_raw = edit_info.get('name', '')
+        filename_clean = filename_raw.replace('-', ' ').replace('_', ' ')
+        filename_clean = re.sub(r'\s+', ' ', filename_clean).strip()
+        filename_clean = filename_clean.replace(' ', '_')
+        filename_clean = re.sub(r'_+', '_', filename_clean)
+        
         track_id = f"{isrc}_{filename_clean}" if isrc else filename_clean
         
         # Prepare data structure
