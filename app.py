@@ -147,10 +147,13 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         # Add Media field
         tags.add(TMED(encoding=3, text='ID By Rivoli'))
         
-        # Calculate and add length
-        audio_segment = AudioSegment.from_mp3(filepath)
-        length_ms = len(audio_segment)
-        tags.add(TLEN(encoding=3, text=str(length_ms)))
+        # Calculate and add length (FAST METHOD using mutagen, not pydub)
+        try:
+            audio_info = MP3(filepath)
+            length_ms = int(audio_info.info.length * 1000)
+            tags.add(TLEN(encoding=3, text=str(length_ms)))
+        except:
+            pass  # Skip if can't read length
         
         # Add ID By Rivoli comment / description
         tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
