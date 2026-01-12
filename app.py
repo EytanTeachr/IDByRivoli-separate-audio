@@ -7,7 +7,7 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX, TXXX
 from pydub import AudioSegment
 import librosa
 import numpy as np
@@ -143,14 +143,22 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         # 7. BPM (calculated)
         tags.add(TBPM(encoding=3, text=str(bpm)))
         
-        # 8. ISRC (from original)
+        # 8. ISRC (from original) - IMPORTANT: Always include
+        isrc_value = ''
         if original_tags and 'TSRC' in original_tags:
-            tags.add(TSRC(encoding=3, text=original_tags['TSRC'].text))
+            isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
+            tags.add(TSRC(encoding=3, text=isrc_value))
         
         # 9. Publisher
         tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # 10. Length
+        # 10. Custom Track ID: $ISRC_$filename
+        # Extract clean filename (without path and extension)
+        filename_base = os.path.splitext(os.path.basename(filepath))[0]
+        track_id = f"{isrc_value}_{filename_base}" if isrc_value else filename_base
+        tags.add(TXXX(encoding=3, desc='TRACK_ID', text=track_id))
+        
+        # 11. Length
         try:
             audio_info = MP3(filepath)
             length_ms = int(audio_info.info.length * 1000)
@@ -262,7 +270,7 @@ import requests
 from datetime import datetime
 
 # API Endpoint Configuration
-API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://3cd10fc1dff8.ngrok.app')
+API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://track.idbyrivoli.com/upload')
 API_KEY = os.environ.get('API_KEY', '5X#JP5ifkSm?oE6@haMriYG$j!87BEfX@zg3CxcE')
 
 # Public URL of this server (for generating absolute download URLs)
