@@ -466,7 +466,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         print(f"Genre '{genre}' detected - Generating original only (no edits)")
         # Just export the original with metadata
         original = AudioSegment.from_mp3(original_path)
-        edits.append(export_edit(original, "Original"))
+        edits.append(export_edit(original, "Main"))
     else:
         print(f"Genre '{genre}' - Generating full edit suite")
         # Generate full edits using the new processor
