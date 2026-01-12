@@ -177,10 +177,35 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # For DJ edits, hard cuts on grid are preferred if quantized.
     
     # 1. Clap In
-    # 16 beats claps -> Start at Drop (Inst + Voc) -> End -> Outro
-    # "On beat 17, start the instrumental together with the drop vocal." -> Implies drop start.
-    # "At the end of the track, add a 32-beat instrumental outro"
-    clap_in = clap_loop_16 + original[drop_start:] + outro_inst
+    # 16 beats claps overlayed on the instrumental (melody passes underneath)
+    # Correct logic to handle "anacrouse" (vocal pickup before drop):
+    # Instead of hard cutting, we overlap the transition.
+    
+    # Create the Clap Section (16 beats) over the Drop Instrumental
+    clap_bed = drop_inst[:ms_16_beats]
+    clap_in_section = clap_bed.overlay(clap_loop_16)
+    
+    # To avoid cutting vocals that start slightly before the drop, 
+    # we take the original track starting slightly before the drop point (e.g., 1 beat before)
+    # and overlay the end of our Clap In section with this start.
+    
+    # Simple approach: Just play the Clap In section fully, then crossfade into the Original at Drop Start.
+    # If vocals start early, they are in the 'original' segment.
+    # The issue is the hard cut: clap_in_section + original[drop_start:]
+    
+    # Solution: Crossfade over 1 beat (approx 500ms) to blend the transition
+    crossfade_duration = int(beat_ms)
+    
+    # We need to extend the clap_in_section slightly or cut the original earlier?
+    # Let's try appending with crossfade. 
+    # Pydub append(crossfade=X) requires the first clip to have extra length or just blends?
+    # It blends the end of A with start of B.
+    
+    clap_in = clap_in_section.append(original[drop_start:], crossfade=crossfade_duration)
+    
+    # Add Outro
+    clap_in = clap_in + outro_inst
+    
     edits.append(("Clap In", clap_in))
     
     # 2. Acap In (Drop Vocal Only)
@@ -245,9 +270,10 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     edits.append(("Short Acap In", short_acap_in))
     
     # 7. Short Clap In
-    # "16 beats of claps only"
+    # "16 beats of claps only" -> Modified: Claps + Melody
     # "After clap intro, include only one break and one drop"
-    short_clap_in = clap_loop_16 + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    # Reuse clap_in_section (Claps + Drop Inst 16 beats)
+    short_clap_in = clap_in_section + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
     edits.append(("Short Clap In", short_clap_in))
     
     # 8. Acap In / Acap Out
