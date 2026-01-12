@@ -265,6 +265,10 @@ from datetime import datetime
 API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://3cd10fc1dff8.ngrok.app')
 API_KEY = os.environ.get('API_KEY', '5X#JP5ifkSm?oE6@haMriYG$j!87BEfX@zg3CxcE')
 
+# Public URL of this server (for generating absolute download URLs)
+# Format: https://your-server.com:port (no trailing slash)
+PUBLIC_URL = os.environ.get('PUBLIC_URL', 'https://bnbv9yziy3agy6-8888.proxy.runpod.net')
+
 def send_track_info_to_api(track_data):
     """
     Sends track information to external API endpoint with authentication.
@@ -299,7 +303,7 @@ def send_track_info_to_api(track_data):
 
 def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     """
-    Prepares track metadata for API export.
+    Prepares track metadata for API export with absolute URLs.
     """
     try:
         # Read original metadata
@@ -326,13 +330,20 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         # Publisher/Label
         label = str(original_tags.get('TPUB', 'ID By Rivoli')).strip() if 'TPUB' in original_tags else 'ID By Rivoli'
         
+        # Construct ABSOLUTE URLs using PUBLIC_URL
+        relative_url = edit_info.get('url', '')
+        absolute_url = f"{PUBLIC_URL}{relative_url}" if relative_url else ''
+        
+        # Cover URL (absolute)
+        cover_url = f"{PUBLIC_URL}/static/covers/Cover_Id_by_Rivoli.jpeg"
+        
         # Prepare data structure
         track_data = {
             'Type': edit_info.get('type', ''),  # e.g., "Clap In", "Extended", etc.
             'Format': edit_info.get('format', 'MP3'),  # "MP3" or "WAV"
             'Titre': edit_info.get('name', ''),
             'Artiste': artist,
-            'Fichiers': edit_info.get('url', ''),  # Download URL
+            'Fichiers': absolute_url,  # ABSOLUTE Download URL
             'Univers': '',  # To be filled if metadata available
             'Mood': '',  # To be filled if metadata available
             'Style': genre,
@@ -342,7 +353,7 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
             'Date de sortie': date_sortie,
             'BPM': bpm,
             'Artiste original': artist,  # Same as Artiste for now
-            'Url': f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"  # Cover URL
+            'Url': cover_url  # ABSOLUTE Cover URL
         }
         
         return track_data
