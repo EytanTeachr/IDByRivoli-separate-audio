@@ -290,9 +290,28 @@ def run_demucs_thread(filepaths, original_filenames):
         job_status['state'] = 'error'
         job_status['error'] = str(e)
 
+def get_git_info():
+    try:
+        # Get hash
+        hash_output = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip().decode('utf-8')
+        # Get date
+        date_output = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=format:%a %b %d %H:%M']).strip().decode('utf-8')
+        
+        # Get count of commits to simulate version number if needed, or just use hardcoded base
+        # Using a simple counter for versioning: v0.20 + (commits since last tag or simple count)
+        # For now, let's keep it simple: just show the hash/date dynamically.
+        # But user asked for "Version update tout seul".
+        # Let's count total commits as a "build number" or similar.
+        count = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD']).strip().decode('utf-8')
+        
+        return f"v0.{count} ({hash_output}) - {date_output}"
+    except:
+        return "Dev Version"
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    version_info = get_git_info()
+    return render_template('index.html', version_info=version_info)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
