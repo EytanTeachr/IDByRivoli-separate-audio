@@ -184,28 +184,39 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     edits = []
     
     # ========================================
-    # CLAP IN EDIT - PROCÉDURE PAS À PAS
+    # CLAP IN EDIT - PROCÉDURE PAS À PAS (V4 - CLEAN)
     # ========================================
     
-    # ÉTAPE 1: Extraire les blocs audio
-    intro_inst_16b = inst[:ms_16_beats]  # 16 premiers temps de l'instrumental
-    outro_inst_32b = inst[:ms_32_beats]  # 32 temps d'instrumental pour l'outro
+    # CONTRAINTE: Claps SEULS au début (pas d'instrumental pour éviter doublage)
+    # Le morceau se lance APRÈS le 4ème clap.
     
-    # ÉTAPE 2: Créer la boucle de claps (16 temps, claps sur 2 et 4)
-    clap_loop = create_clap_loop(bpm, beats=16)
+    # ÉTAPE 1: Créer 8 temps de Claps seuls (4 claps sur temps 2, 4, 6, 8)
+    clap_intro_beats = 8
+    clap_intro = create_clap_loop(bpm, beats=clap_intro_beats)
     
-    # ÉTAPE 3: Section "Clap In" = Instrumental + Claps superposés
-    clap_in_section = intro_inst_16b.overlay(clap_loop)
+    # ÉTAPE 2: Prendre le morceau original à partir du temps 9
+    # (Original temps 0 = notre temps 9)
+    # Donc on ne coupe rien, on prend original dès le début
+    body = original
     
-    # ÉTAPE 4: Assembler le Clap In Edit
-    # [Intro 16b] + [ClapIn 16b] + [Original à partir du temps 33] + [Outro 32b]
-    clap_in_edit = intro_inst_16b + clap_in_section + original[ms_32_beats:] + outro_inst_32b
+    # ÉTAPE 3: Outro instrumental (32 temps)
+    outro_inst_32b = inst[:ms_32_beats]
+    
+    # ÉTAPE 4: Assembler
+    # [8 temps Claps seuls] + [Morceau Original] + [32 temps Outro]
+    clap_in_edit = clap_intro + body + outro_inst_32b
     
     edits.append(("Clap In", clap_in_edit))
     
     # ========================================
     # AUTRES EDITS (Versions Courtes)
     # ========================================
+    
+    # Blocks communs
+    intro_inst_16b = inst[:ms_16_beats]
+    outro_inst_32b = inst[:ms_32_beats]
+    clap_loop_16 = create_clap_loop(bpm, beats=16)
+    clap_in_section = intro_inst_16b.overlay(clap_loop_16)
     
     # Find Drop for vocal extraction (pour les autres versions qui en ont besoin)
     drop_start = find_drop_start(inst, beat_ms)
