@@ -11,6 +11,26 @@
             font-weight: 200 700;
             font-display: swap;
         }
+        
+        /* Fallback for individual weights if Variable font fails or isn't supported */
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Semibold.ttf') format('truetype');
+            font-weight: 600;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-display: swap;
+        }
 
         body {
             font-family: 'ClashGrotesk', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
