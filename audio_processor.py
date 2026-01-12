@@ -143,11 +143,16 @@ def create_clap_loop(bpm, beats=16):
     # Create silence container
     loop = AudioSegment.silent(duration=int(total_duration))
     
-    # Place claps on beats (every beat)
-    # "Clap In ... 16 beats of claps only" -> usually means claps on the beat (1, 2, 3, 4)
+    # Place claps on beats 2 and 4 (indices 1 and 3 in 0-indexed loop)
+    # The loop repeats every 4 beats (1 measure)
+    # 16 beats = 4 measures.
+    # We iterate through all beats. If beat_index % 4 is 1 or 3 (2nd or 4th beat), add clap.
+    
     for i in range(beats):
-        pos = int(i * beat_ms)
-        loop = loop.overlay(clap_sample, position=pos)
+        # 0-indexed: 0=Beat1, 1=Beat2, 2=Beat3, 3=Beat4
+        if (i % 4) == 1 or (i % 4) == 3:
+            pos = int(i * beat_ms)
+            loop = loop.overlay(clap_sample, position=pos)
         
     return loop
 
@@ -176,46 +181,57 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # Helper to clean up segments (fade in/out slightly to avoid clicks?)
     # For DJ edits, hard cuts on grid are preferred if quantized.
     
-    # 1. Clap In (New 32-beat Logic: Intro 16b + ClapIn 16b -> Drop)
-    # Beats 1-16: Low Energy Intro (Kick/Bass only).
-    # Beats 17-32: Clap In (Claps + Melody).
-    # Beat 33: Drop (Original).
+    # 1. Clap In (New Logic: "Extended Mix" Structure)
+    # Intro Part 1 (16 Measures = 64 Beats): Low Energy (Kick/Bass) - NO CLAP
+    # Intro Part 2 (16 Measures = 64 Beats): High Energy (Inst + Claps 2&4)
+    # Drop: Original Track
+    # Outro: 16 Measures Inst
     
-    # --- PHASE 1: Beats 1-16 (Low Energy) ---
-    # We take the first 16 beats of the instrumental.
-    # To simulate "Kick only", we apply a Low Pass Filter at 400Hz.
-    inst_segment_16 = drop_inst[:ms_16_beats]
-    intro_phase_1 = inst_segment_16.low_pass_filter(400)
+    # Define lengths in MS
+    beats_per_measure = 4
+    intro_measures = 16
+    intro_beats = intro_measures * beats_per_measure # 64 beats
     
-    # --- PHASE 2: Beats 17-32 (Clap In) ---
-    # We take the SAME 16 beats of instrumental (or the next 16? usually loops).
-    # Let's reuse the same 16 beats for consistency as a loop.
-    # We overlay the claps on this full frequency segment.
-    intro_phase_2_bed = drop_inst[:ms_16_beats]
-    intro_phase_2 = intro_phase_2_bed.overlay(clap_loop_16)
+    ms_intro_section = intro_beats * beat_ms
     
-    # --- COMBINE INTRO ---
-    # Total Intro = Phase 1 + Phase 2 (32 beats total)
-    full_intro = intro_phase_1 + intro_phase_2
+    # --- PHASE 1: Low Energy Intro (64 Beats) ---
+    # We take a 64-beat segment of the instrumental (Drop or Intro).
+    # If the drop is short (32 beats), we loop it twice.
+    # To simulate "Kick/Bass only", we apply Low Pass Filter.
+    
+    # Get 64 beats of instrumental.
+    # Drop Inst is usually 32 beats. Let's loop it 2 times.
+    inst_32b = drop_inst[:ms_32_beats]
+    inst_64b = inst_32b + inst_32b # Loop twice
+    
+    intro_part_1 = inst_64b.low_pass_filter(400)
+    
+    # --- PHASE 2: Clap In Section (64 Beats) ---
+    # Full frequency instrumental (64 beats) + Claps on 2 & 4.
+    
+    # Create Clap Loop for 64 beats
+    clap_loop_64 = create_clap_loop(bpm, beats=intro_beats)
+    
+    intro_part_2 = inst_64b.overlay(clap_loop_64)
     
     # --- TRANSITION TO DROP ---
-    # We need to cut the claps at the end of Phase 2 to let the original vocal pickup shine.
-    # Same logic as before: Cut 1 beat before end of Phase 2.
-    # Phase 2 length = ms_16_beats.
-    # We keep (ms_16_beats - 1 beat) of Phase 2.
-    # Then we append Original starting at (DropStart - 1 beat).
+    # Cut claps 1 beat before the end of Phase 2 to allow Vocal Pickup.
+    # Phase 2 length = ms_intro_section.
     
-    # Cut Phase 2 (keep 15 beats)
-    intro_phase_2_cut = intro_phase_2[:(ms_16_beats - int(beat_ms))]
+    intro_part_2_cut = intro_part_2[:(len(intro_part_2) - int(beat_ms))]
     
     # Original Pickup (start 1 beat before drop)
     original_pickup = original[max(0, drop_start - int(beat_ms)):]
     
-    # Construct Final Track
-    # Intro Phase 1 (16 beats) + Intro Phase 2 Cut (15 beats) + Original Pickup (1 beat + rest) + Outro
-    clap_in = intro_phase_1 + intro_phase_2_cut + original_pickup + outro_inst
+    # --- OUTRO ---
+    # 16 Measures (64 beats) of Instrumental
+    # We can reuse inst_64b
+    outro_section = inst_64b
     
-    edits.append(("Clap In", clap_in))
+    # Construct Final Track
+    clap_in = intro_part_1 + intro_part_2_cut + original_pickup + outro_section
+    
+    edits.append(("Extended Mix (Clap In)", clap_in))
     
     # 2. Acap In (Drop Vocal Only)
     # 16 beats acapella (first 16 beats of drop vocal) -> Drop -> End -> Outro
