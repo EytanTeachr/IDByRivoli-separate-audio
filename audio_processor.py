@@ -94,7 +94,25 @@ def find_drop_start(inst_segment, beat_ms, sr=44100):
     return best_start_ms
 
 def generate_clap(duration_ms=200):
-    # White noise with exponential decay
+    # Check if we have a custom clap sample
+    sample_path = os.path.join(os.path.dirname(__file__), 'assets', 'clap.wav')
+    
+    if os.path.exists(sample_path):
+        try:
+            # Load the custom sample
+            clap = AudioSegment.from_wav(sample_path)
+            
+            # If the sample is longer than the beat duration, we might want to trim it, 
+            # but usually for a clap sample we want the full tail unless it's huge.
+            # Let's just ensure it's not excessively long (e.g. > 1 sec)
+            if len(clap) > 1000:
+                clap = clap[:1000].fade_out(50)
+                
+            return clap
+        except Exception as e:
+            print(f"Error loading custom clap sample: {e}. Falling back to synthesis.")
+    
+    # Fallback: White noise with exponential decay
     noise = WhiteNoise().to_audio_segment(duration=duration_ms)
     # Simple envelope
     # We want a sharp attack and fast decay
