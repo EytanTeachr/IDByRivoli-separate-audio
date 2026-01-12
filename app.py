@@ -172,7 +172,12 @@ def run_demucs_thread(filepaths, original_filenames):
                 '-o', OUTPUT_FOLDER
             ] + chunk
 
-            print(f"Starting batch processing of chunk {i//50 + 1}/{len(filepaths)//50 + 1}...")
+            chunk_num = i // 50 + 1
+            total_chunks = (len(filepaths) - 1) // 50 + 1
+            print(f"Starting batch processing of chunk {chunk_num}/{total_chunks}...")
+            
+            # Reset progress for new chunk relative to file count? 
+            # Ideally we track global file index.
             
             process = subprocess.Popen(
                 command, 
@@ -189,22 +194,47 @@ def run_demucs_thread(filepaths, original_filenames):
                 print(line, end='')
                 
                 if "Separating track" in line:
+                    # Parse filename from line if possible, or just increment
+                    # Demucs output: "Separating track filename.mp3"
+                    try:
+                        match = re.search(r"Separating track\s+(.+)$", line)
+                        if match:
+                            job_status['current_filename'] = match.group(1).strip()
+                    except:
+                        pass
+
                     current_file_index += 1
                     job_status['current_file_idx'] = current_file_index
-                    job_status['current_filename'] = os.path.basename(filepaths[current_file_index-1])
-                    chunk_size = 50 / len(filepaths)
-                    job_status['progress'] = int((current_file_index - 1) * chunk_size)
+                    
+                    # Calculate global progress (0-50%)
+                    # Phase 1 is separation (0-50%), Phase 2 is editing (50-100%)
+                    # Actually, Demucs takes most of the time. Let's say Demucs is 0-90%?
+                    # The user prompt implies Edit generation is fast.
+                    # But previous code had 0-50 / 50-100.
+                    # Let's keep 0-50 for Demucs for now, but update UI to be clearer.
+                    
+                    percent_per_file = 50 / len(filepaths)
+                    base_progress = (current_file_index - 1) * percent_per_file
+                    job_status['progress'] = int(base_progress)
+                    job_status['current_step'] = f"Séparation IA (Lot {chunk_num}/{total_chunks})"
 
                 elif "%|" in line:
+                    # Demucs progress bar " 15%|███      | 20/130 [00:05<00:25,  4.23it/s]"
                     try:
+                        # Extract percentage
                         parts = line.split('%|')
                         if len(parts) > 0:
                             percent_part = parts[0].strip()
-                            percent_val = int(re.search(r'(\d+)$', percent_part).group(1))
-                            chunk_size = 50 / len(filepaths)
-                            current_file_base = (current_file_index - 1) * chunk_size
-                            added_val = (percent_val / 100) * chunk_size
-                            job_status['progress'] = int(current_file_base + added_val)
+                            # Use regex to find last number before %
+                            p_match = re.search(r'(\d+)$', percent_part)
+                            if p_match:
+                                track_percent = int(p_match.group(1))
+                                
+                                # Add fractional progress for current file
+                                percent_per_file = 50 / len(filepaths)
+                                base_progress = (current_file_index - 1) * percent_per_file
+                                added_progress = (track_percent / 100) * percent_per_file
+                                job_status['progress'] = int(base_progress + added_progress)
                     except:
                         pass
             
@@ -217,6 +247,7 @@ def run_demucs_thread(filepaths, original_filenames):
 
         print("Starting Edit Generation Phase...")
         job_status['progress'] = 50
+        job_status['current_step'] = "Génération des Edits"
         
         all_results = []
         
@@ -226,6 +257,7 @@ def run_demucs_thread(filepaths, original_filenames):
             # Update status for current file
             job_status['current_file_idx'] = i + 1
             job_status['current_filename'] = filename
+            job_status['current_step'] = "Création des versions DJ (Edits)"
             
             track_name = os.path.splitext(filename)[0]
             
@@ -286,6 +318,7 @@ def upload_file():
         'total_files': len(files),
         'current_file_idx': 0,
         'current_filename': '',
+        'current_step': 'Initialisation...', # Added detail
         'results': [],
         'error': None
     }

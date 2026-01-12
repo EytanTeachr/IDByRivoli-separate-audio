@@ -439,14 +439,11 @@
                         progressFill.style.width = percent + '%';
                         progressFill.textContent = percent + '%';
                         
-                        // Show detailed message including current filename
-                        const currentFile = status.current_filename || '...';
+                        // Show detailed step and file info
+                        const step = status.current_step || 'Traitement...';
+                        const file = status.current_filename ? `| Fichier : ${status.current_filename}` : '';
                         
-                        if (percent < 50) {
-                            statusText.textContent = `Séparation Audio (IA) : ${currentFile} (${status.current_file_idx} / ${status.total_files})`;
-                        } else {
-                            statusText.textContent = `Génération des Edits : ${currentFile} (${status.current_file_idx} / ${status.total_files})`;
-                        }
+                        statusText.textContent = `${step} ${file}`;
                     } 
                     else if (status.state === 'completed') {
                         clearInterval(pollingInterval);
