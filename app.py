@@ -401,16 +401,8 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     bpm = audio_processor.detect_bpm(original_path)
     print(f"Detected BPM: {bpm}")
     
-    # Check genre to determine if we should generate full edits or just preserve original
-    try:
-        original_audio = MP3(original_path, ID3=ID3)
-        original_tags = original_audio.tags
-        genre = str(original_tags.get('TCON', '')).lower() if original_tags and 'TCON' in original_tags else ''
-    except:
-        genre = ''
-    
-    # Genres that should NOT get edits (just original MP3/WAV)
-    simple_genres = ['house', 'electro house', 'dance']
+    # V1 BRANCH: Generate ONLY original track with full metadata (no edits)
+    print("V1 Mode: Generating original track only (no edits)")
     
     edits = []
 
@@ -461,20 +453,9 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             'wav': wav_url
         }
     
-    # Check if genre is in the "simple" list
-    if any(simple_genre in genre for simple_genre in simple_genres):
-        print(f"Genre '{genre}' detected - Generating original only (no edits)")
-        # Just export the original with metadata
-        original = AudioSegment.from_mp3(original_path)
-        edits.append(export_edit(original, "Original"))
-    else:
-        print(f"Genre '{genre}' - Generating full edit suite")
-        # Generate full edits using the new processor
-        generated_edits = audio_processor.process_track(vocals_path, inst_path, original_path, bpm)
-        
-        # Iterate over generated edits and export them
-        for suffix, segment in generated_edits:
-            edits.append(export_edit(segment, suffix))
+    # Export ONLY the original track (no edits)
+    original = AudioSegment.from_mp3(original_path)
+    edits.append(export_edit(original, "Original"))
 
     return edits
 
