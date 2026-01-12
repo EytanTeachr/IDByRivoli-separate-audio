@@ -282,4 +282,8 @@ def download_processed(subdir, filename):
     )
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Use environment variable for port, or default to 5001. 
+    # RunPod often expects 8888 for some proxy setups, so we can try to default to that or just be flexible.
+    # The user URL suggests port 8888.
+    port = int(os.environ.get('PORT', 8888))
+    app.run(host='0.0.0.0', port=port, debug=True)
