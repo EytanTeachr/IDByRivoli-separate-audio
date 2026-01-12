@@ -203,8 +203,15 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     outro_inst_32b = inst[:ms_32_beats]
     
     # ÉTAPE 4: Assembler
-    # [8 temps Claps seuls] + [Morceau Original] + [32 temps Outro]
-    clap_in_edit = clap_intro + body + outro_inst_32b
+    # [8 temps Claps seuls] + [Morceau Original complet]
+    # On REMPLACE les 32 derniers temps du morceau par l'Outro Instrumental
+    # Pour avoir une fin "mixable" sans vocals
+    
+    # Couper les 32 derniers temps de l'original
+    original_body = original[:-int(ms_32_beats)] if len(original) > ms_32_beats else original
+    
+    # Assembler
+    clap_in_edit = clap_intro + original_body + outro_inst_32b
     
     edits.append(("Clap In", clap_in_edit))
     
