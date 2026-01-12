@@ -93,8 +93,8 @@ def clean_filename(filename):
 
 def update_metadata(filepath, artist, title, original_path, bpm):
     """
-    Updates metadata while preserving original tags and adding ID By Rivoli branding.
-    Adds the ID By Rivoli cover as primary artwork.
+    Updates metadata with ONLY the specified fields (clean slate).
+    Fields: Title, Artist, Album, Date, Track Number, Genre, BPM, ISRC, Picture, Length, Publisher
     """
     try:
         # Read original file metadata
@@ -104,64 +104,61 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         except:
             original_tags = None
         
-        # Initialize or load existing tags for output file
+        # Clear all existing tags and start fresh
         try:
             audio = MP3(filepath, ID3=ID3)
-            if audio.tags is None:
-                audio.add_tags()
-            tags = audio.tags
+            audio.delete()  # Remove all tags
+            audio.save()
         except:
-            tags = ID3()
+            pass
         
-        # Preserve/Copy metadata from original
-        if original_tags:
-            # Artist (PRESERVE ORIGINAL - do not change to "ID By Rivoli")
-            if 'TPE1' in original_tags:
-                tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
-            
-            # Album
-            if 'TALB' in original_tags:
-                tags.add(TALB(encoding=3, text=original_tags['TALB'].text))
-            
-            # Date (PRESERVE FULL DATE FORMAT if available)
-            if 'TDRC' in original_tags:
-                tags.add(TDRC(encoding=3, text=original_tags['TDRC'].text))
-            
-            # Track Number
-            if 'TRCK' in original_tags:
-                tags.add(TRCK(encoding=3, text=original_tags['TRCK'].text))
-            
-            # Genre
-            if 'TCON' in original_tags:
-                tags.add(TCON(encoding=3, text=original_tags['TCON'].text))
-            
-            # ISRC
-            if 'TSRC' in original_tags:
-                tags.add(TSRC(encoding=3, text=original_tags['TSRC'].text))
+        # Create new clean ID3 tag
+        tags = ID3(filepath)
         
-        # Add/Override with ID By Rivoli specific fields
+        # Add ONLY specified fields
+        
+        # 1. Title (from parameter)
         tags.add(TIT2(encoding=3, text=title))
+        
+        # 2. Artist (from original)
+        if original_tags and 'TPE1' in original_tags:
+            tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
+        
+        # 3. Album (from original)
+        if original_tags and 'TALB' in original_tags:
+            tags.add(TALB(encoding=3, text=original_tags['TALB'].text))
+        
+        # 4. Date (from original, preserve full format)
+        if original_tags and 'TDRC' in original_tags:
+            tags.add(TDRC(encoding=3, text=original_tags['TDRC'].text))
+        
+        # 5. Track Number (from original)
+        if original_tags and 'TRCK' in original_tags:
+            tags.add(TRCK(encoding=3, text=original_tags['TRCK'].text))
+        
+        # 6. Genre (from original)
+        if original_tags and 'TCON' in original_tags:
+            tags.add(TCON(encoding=3, text=original_tags['TCON'].text))
+        
+        # 7. BPM (calculated)
         tags.add(TBPM(encoding=3, text=str(bpm)))
+        
+        # 8. ISRC (from original)
+        if original_tags and 'TSRC' in original_tags:
+            tags.add(TSRC(encoding=3, text=original_tags['TSRC'].text))
+        
+        # 9. Publisher
         tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # Add Media field
-        tags.add(TMED(encoding=3, text='ID By Rivoli'))
-        
-        # Calculate and add length (FAST METHOD using mutagen, not pydub)
+        # 10. Length
         try:
             audio_info = MP3(filepath)
             length_ms = int(audio_info.info.length * 1000)
             tags.add(TLEN(encoding=3, text=str(length_ms)))
         except:
-            pass  # Skip if can't read length
+            pass
         
-        # Add ID By Rivoli comment / description
-        tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
-        
-        # Add Website URL
-        tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
-        
-        # Add Artwork - ID By Rivoli Cover as PRIMARY
+        # 11. Picture - ID By Rivoli Cover as PRIMARY
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
         if os.path.exists(cover_path):
             with open(cover_path, 'rb') as img:
@@ -173,20 +170,27 @@ def update_metadata(filepath, artist, title, original_path, bpm):
                     data=img.read()
                 ))
         
-        # Add original cover as secondary if exists
-        if original_tags and 'APIC:' in original_tags:
+        # 12. Picture - Original cover as secondary if exists
+        if original_tags:
             for apic_key in original_tags.keys():
-                if apic_key.startswith('APIC:') and 'APIC:ID By Rivoli' not in apic_key:
-                    original_apic = original_tags[apic_key]
-                    # Add as "Other" type to keep it secondary
-                    tags.add(APIC(
-                        encoding=original_apic.encoding,
-                        mime=original_apic.mime,
-                        type=0,  # Other
-                        desc='Original',
-                        data=original_apic.data
-                    ))
-                    break  # Only add one original cover
+                if apic_key.startswith('APIC:') and 'ID By Rivoli' not in str(apic_key):
+                    try:
+                        original_apic = original_tags[apic_key]
+                        tags.add(APIC(
+                            encoding=original_apic.encoding,
+                            mime=original_apic.mime,
+                            type=0,  # Other
+                            desc='Original',
+                            data=original_apic.data
+                        ))
+                        break
+                    except:
+                        pass
+        
+        # Additional fields for ID By Rivoli branding (optional, can be removed if not desired)
+        tags.add(TMED(encoding=3, text='ID By Rivoli'))
+        tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
+        tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         tags.save(filepath, v2_version=3)
         
