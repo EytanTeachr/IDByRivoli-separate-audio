@@ -395,14 +395,8 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
         audio_segment.export(out_path_wav, format="wav")
         
-        # Update metadata for MP3
+        # Update metadata for MP3 ONLY (WAV metadata can corrupt files)
         update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
-        
-        # Update metadata for WAV (add ID3 tags to WAV - non-standard but supported by many players)
-        try:
-            update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
-        except Exception as e:
-            print(f"Warning: Could not add metadata to WAV: {e}")
         
         subdir = clean_name
         
