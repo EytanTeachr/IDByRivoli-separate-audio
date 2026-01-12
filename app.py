@@ -270,7 +270,7 @@ import requests
 from datetime import datetime
 
 # API Endpoint Configuration
-API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://track.idbyrivoli.com/upload')
+API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://3cd10fc1dff8.ngrok.app')
 API_KEY = os.environ.get('API_KEY', '5X#JP5ifkSm?oE6@haMriYG$j!87BEfX@zg3CxcE')
 
 # Public URL of this server (for generating absolute download URLs)
