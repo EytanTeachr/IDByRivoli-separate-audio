@@ -7,7 +7,7 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB
 from pydub import AudioSegment
 import librosa
 import numpy as np
@@ -91,20 +91,98 @@ def clean_filename(filename):
     name = re.sub(r'\s+', ' ', name).strip()
     return name, ext
 
-def update_metadata(filepath, artist, title):
+def update_metadata(filepath, artist, title, original_path, bpm):
+    """
+    Updates metadata while preserving original tags and adding ID By Rivoli branding.
+    Adds the ID By Rivoli cover as primary artwork.
+    """
     try:
+        # Read original file metadata
         try:
-            audio = MP3(filepath, ID3=EasyID3)
-            audio.delete()
-            audio.save()
+            original_audio = MP3(original_path, ID3=ID3)
+            original_tags = original_audio.tags
         except:
-            pass
+            original_tags = None
         
-        tags = ID3(filepath)
+        # Initialize or load existing tags for output file
+        try:
+            audio = MP3(filepath, ID3=ID3)
+            if audio.tags is None:
+                audio.add_tags()
+            tags = audio.tags
+        except:
+            tags = ID3()
+        
+        # Preserve/Copy metadata from original
+        if original_tags:
+            # Album
+            if 'TALB' in original_tags:
+                tags.add(TALB(encoding=3, text=original_tags['TALB'].text))
+            
+            # Date
+            if 'TDRC' in original_tags:
+                tags.add(TDRC(encoding=3, text=original_tags['TDRC'].text))
+            
+            # Track Number
+            if 'TRCK' in original_tags:
+                tags.add(TRCK(encoding=3, text=original_tags['TRCK'].text))
+            
+            # Genre
+            if 'TCON' in original_tags:
+                tags.add(TCON(encoding=3, text=original_tags['TCON'].text))
+            
+            # ISRC
+            if 'TSRC' in original_tags:
+                tags.add(TSRC(encoding=3, text=original_tags['TSRC'].text))
+            
+            # Publisher (override with ID By Rivoli)
+            tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        else:
+            # Default values if no original metadata
+            tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        
+        # Override/Add core fields
         tags.add(TIT2(encoding=3, text=title))
         tags.add(TPE1(encoding=3, text=artist))
+        tags.add(TBPM(encoding=3, text=str(bpm)))
+        
+        # Calculate and add length
+        audio_segment = AudioSegment.from_mp3(filepath)
+        length_ms = len(audio_segment)
+        tags.add(TLEN(encoding=3, text=str(length_ms)))
+        
+        # Add ID By Rivoli comment
         tags.add(COMM(encoding=3, lang='eng', desc='ID By Rivoli', text='https://idbyrivoli.com'))
-        tags.save()
+        
+        # Add Artwork - ID By Rivoli Cover as PRIMARY
+        cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
+        if os.path.exists(cover_path):
+            with open(cover_path, 'rb') as img:
+                tags.add(APIC(
+                    encoding=3,
+                    mime='image/jpeg',
+                    type=3,  # Cover (front)
+                    desc='ID By Rivoli',
+                    data=img.read()
+                ))
+        
+        # Add original cover as secondary if exists
+        if original_tags and 'APIC:' in original_tags:
+            for apic_key in original_tags.keys():
+                if apic_key.startswith('APIC:') and 'APIC:ID By Rivoli' not in apic_key:
+                    original_apic = original_tags[apic_key]
+                    # Add as "Other" type to keep it secondary
+                    tags.add(APIC(
+                        encoding=original_apic.encoding,
+                        mime=original_apic.mime,
+                        type=0,  # Other
+                        desc='Original',
+                        data=original_apic.data
+                    ))
+                    break  # Only add one original cover
+        
+        tags.save(filepath, v2_version=3)
+        
     except Exception as e:
         print(f"Error updating metadata for {filepath}: {e}")
 
@@ -133,7 +211,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
         audio_segment.export(out_path_wav, format="wav")
         
-        update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}")
+        update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
         
         subdir = clean_name
         
