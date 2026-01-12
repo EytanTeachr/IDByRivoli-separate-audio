@@ -304,6 +304,9 @@ def upload_file():
         # But for now, we assume user is impatient or trying to upload while busy.
         # Let's allow FORCE reset if they reload page?
         # No, that might break current job.
+        
+        # NOTE FOR USER: If you get this 409 error repeatedly without any active process visible,
+        # it might be a stuck state. Restart the server (pkill python; python app.py) to fix.
         return jsonify({'error': 'Un traitement est déjà en cours. Veuillez patienter.'}), 409
 
     if 'files[]' not in request.files:
