@@ -308,7 +308,12 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # Or use the same logic (15 beats + pickup).
     # Let's use 16 beats full for Short Clap In to keep it simple unless specified.
     
-    short_clap_in = intro_phase_2 + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    # ERROR FIX: 'intro_phase_2' was defined inside "Clap In" block which is local scope if edits are appended.
+    # But wait, Python scope is function level, so 'intro_phase_2' should be available if defined above.
+    # Ah, I see: I defined 'intro_part_2' in the block above, not 'intro_phase_2'.
+    # Variable name mismatch.
+    
+    short_clap_in = intro_part_2 + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
     
     edits.append(("Short Clap In", short_clap_in))
     
