@@ -258,6 +258,83 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
     except Exception as e:
         print(f"Warning: Could not add ID3 tags to WAV: {e}")
 
+import requests
+from datetime import datetime
+
+# API Endpoint Configuration (to be set by user)
+API_ENDPOINT = os.environ.get('API_ENDPOINT', None)  # Set via environment variable or modify here
+
+def send_track_info_to_api(track_data):
+    """
+    Sends track information to external API endpoint.
+    """
+    if not API_ENDPOINT:
+        print("API_ENDPOINT not configured, skipping API call")
+        return
+    
+    try:
+        response = requests.post(API_ENDPOINT, json=track_data, timeout=10)
+        if response.status_code == 200:
+            print(f"Successfully sent track info to API: {track_data['Titre']}")
+        else:
+            print(f"API error {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"Failed to send to API: {e}")
+
+def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
+    """
+    Prepares track metadata for API export.
+    """
+    try:
+        # Read original metadata
+        original_audio = MP3(original_path, ID3=ID3)
+        original_tags = original_audio.tags if original_audio.tags else {}
+        
+        # Extract fields
+        artist = str(original_tags.get('TPE1', 'Unknown')).strip() if 'TPE1' in original_tags else 'Unknown'
+        album = str(original_tags.get('TALB', '')).strip() if 'TALB' in original_tags else ''
+        genre = str(original_tags.get('TCON', '')).strip() if 'TCON' in original_tags else ''
+        
+        # Date handling
+        date_str = str(original_tags.get('TDRC', '')).strip() if 'TDRC' in original_tags else ''
+        try:
+            # Try to parse date to timestamp
+            if date_str:
+                date_obj = datetime.strptime(date_str[:10], '%Y-%m-%d')
+                date_sortie = int(date_obj.timestamp())
+            else:
+                date_sortie = 0
+        except:
+            date_sortie = 0
+        
+        # Publisher/Label
+        label = str(original_tags.get('TPUB', 'ID By Rivoli')).strip() if 'TPUB' in original_tags else 'ID By Rivoli'
+        
+        # Prepare data structure
+        track_data = {
+            'Type': edit_info.get('type', ''),  # e.g., "Clap In", "Extended", etc.
+            'Format': edit_info.get('format', 'MP3'),  # "MP3" or "WAV"
+            'Titre': edit_info.get('name', ''),
+            'Artiste': artist,
+            'Fichiers': edit_info.get('url', ''),  # Download URL
+            'Univers': '',  # To be filled if metadata available
+            'Mood': '',  # To be filled if metadata available
+            'Style': genre,
+            'Album': album,
+            'Label': 'ID By Rivoli',  # Always ID By Rivoli for processed tracks
+            'Sous-label': label if label != 'ID By Rivoli' else '',  # Original label as sub-label
+            'Date de sortie': date_sortie,
+            'BPM': bpm,
+            'Artiste original': artist,  # Same as Artiste for now
+            'Url': f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"  # Cover URL
+        }
+        
+        return track_data
+        
+    except Exception as e:
+        print(f"Error preparing track metadata: {e}")
+        return None
+
 import audio_processor
 
 def create_edits(vocals_path, inst_path, original_path, base_output_path, base_filename):
@@ -302,10 +379,35 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         
         subdir = clean_name
         
+        mp3_url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_mp3)}"
+        wav_url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_wav)}"
+        
+        # Prepare and send track info to API (for MP3)
+        track_info_mp3 = {
+            'type': suffix,
+            'format': 'MP3',
+            'name': f"{clean_name} {suffix}",
+            'url': mp3_url
+        }
+        track_data_mp3 = prepare_track_metadata(track_info_mp3, original_path, bpm)
+        if track_data_mp3:
+            send_track_info_to_api(track_data_mp3)
+        
+        # Prepare and send track info to API (for WAV)
+        track_info_wav = {
+            'type': suffix,
+            'format': 'WAV',
+            'name': f"{clean_name} {suffix}",
+            'url': wav_url
+        }
+        track_data_wav = prepare_track_metadata(track_info_wav, original_path, bpm)
+        if track_data_wav:
+            send_track_info_to_api(track_data_wav)
+        
         return {
             'name': f"{clean_name} {suffix}",
-            'mp3': f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_mp3)}",
-            'wav': f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_wav)}"
+            'mp3': mp3_url,
+            'wav': wav_url
         }
     
     # Check if genre is in the "simple" list
