@@ -10,10 +10,18 @@ def detect_bpm(file_path):
         y, sr = librosa.load(file_path, duration=120)
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         if hasattr(tempo, 'item'):
-            return round(tempo.item())
+            bpm = round(tempo.item())
         elif isinstance(tempo, np.ndarray):
-            return round(float(tempo[0])) if tempo.size > 0 else 120
-        return round(tempo)
+            bpm = round(float(tempo[0])) if tempo.size > 0 else 120
+        else:
+            bpm = round(tempo)
+        
+        # Validate BPM range (typical dance music: 60-200 BPM)
+        if bpm < 60 or bpm > 200:
+            print(f"Warning: BPM {bpm} out of range, defaulting to 120")
+            return 120
+            
+        return bpm
     except Exception as e:
         print(f"Error detecting BPM: {e}")
         return 120
