@@ -176,32 +176,81 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     # Helper to clean up segments (fade in/out slightly to avoid clicks?)
     # For DJ edits, hard cuts on grid are preferred if quantized.
     
-    # 1. Clap In
-    # 16 beats claps overlayed on the instrumental (melody passes underneath)
-    # Correct logic to handle "anacrouse" (vocal pickup before drop):
-    # Instead of hard cutting, we overlap the transition.
+    # 1. Clap In (Updated Logic for 15h19 Request)
+    # Goal: Intro 16 beats (Claps + Melody/Drums from Drop).
+    # Then: Cut claps immediately when vocals start (anacrouse)
+    # And continue with original track perfectly synced.
     
-    # Create the Clap Section (16 beats) over the Drop Instrumental
-    clap_bed = drop_inst[:ms_16_beats]
-    clap_in_section = clap_bed.overlay(clap_loop_16)
+    # Step 1: Create the Intro Bed (Melody + Drums from Drop Inst)
+    # We take the first 16 beats of the Drop Instrumental.
+    intro_bed = drop_inst[:ms_16_beats]
     
-    # To avoid cutting vocals that start slightly before the drop, 
-    # we take the original track starting slightly before the drop point (e.g., 1 beat before)
-    # and overlay the end of our Clap In section with this start.
+    # Step 2: Overlay Claps on this bed
+    intro_with_claps = intro_bed.overlay(clap_loop_16)
     
-    # Simple approach: Just play the Clap In section fully, then crossfade into the Original at Drop Start.
-    # If vocals start early, they are in the 'original' segment.
-    # The issue is the hard cut: clap_in_section + original[drop_start:]
+    # Step 3: Handle the transition to the full track.
+    # The user says "Coupe les claps des le debut de l'anacrouse".
+    # This implies we switch to the Original Track slightly *before* the theoretical drop point if there's a vocal pickup.
+    # Since we can't easily detect the exact millisecond of the vocal pickup automatically without complex VAD,
+    # we will use a safe crossfade window centered around the beat.
+    # However, to simulate "cutting claps", we effectively switch from (Inst+Clap) to (Original)
+    # The Original track at the drop point contains (Inst + Vocal).
+    # If the vocal starts early, it is in the Original track before the drop point.
     
-    # Solution: Crossfade over 1 beat (approx 500ms) to blend the transition
-    crossfade_duration = int(beat_ms)
+    # Strategy: 
+    # Take Original track starting from (DropStart - 1 Beat).
+    # Take IntroWithClaps (first 15 beats).
+    # Crossfade them over the last beat?
+    # Or just hard cut if perfectly quantized? Crossfade is safer for "anacrouse".
     
-    # We need to extend the clap_in_section slightly or cut the original earlier?
-    # Let's try appending with crossfade. 
-    # Pydub append(crossfade=X) requires the first clip to have extra length or just blends?
-    # It blends the end of A with start of B.
+    # Let's try: Intro (16 beats) -> but we crossfade into Original starting at (DropStart - 500ms).
+    # This effectively fades out the claps while fading in the vocal pickup.
     
-    clap_in = clap_in_section.append(original[drop_start:], crossfade=crossfade_duration)
+    # Crossfade duration = 1 beat
+    xfade_ms = int(beat_ms)
+    
+    # We shorten the intro by the crossfade amount so the total timing remains correct on the grid
+    intro_part = intro_with_claps
+    
+    # We start the original track 'xfade_ms' BEFORE the drop start to catch the vocal pickup
+    original_start_point = max(0, drop_start - xfade_ms)
+    original_part = original[original_start_point:]
+    
+    # Now we blend. 
+    # intro_part is 16 beats long.
+    # We want the drop of original_part to align with end of intro_part.
+    # original_part starts 1 beat before drop.
+    # So we should append original_part to (intro_part - 1 beat).
+    
+    # Cut intro at 15 beats
+    intro_cut = intro_part[:(ms_16_beats - xfade_ms)]
+    
+    # Append with crossfade? No, if we cut, we can just concat if we trust the grid.
+    # But a crossfade smooths it.
+    # Let's crossfade the last beat of Intro (with claps) against the pre-drop beat of Original (with vocals).
+    # Actually, if we crossfade, we hear claps fading out + vocals fading in.
+    # User said "Coupe les claps". Maybe a fast fade out of claps?
+    
+    # Revised approach for "Niquel":
+    # 1. Intro = 16 beats of (DropInst + Claps).
+    # 2. But at beat 16 (or slightly before), we switch to Original.
+    # If we switch at Beat 15, we lose the last clap?
+    # Let's switch at Beat 16 exactly, but using the Original's audio from Beat 16 (which is DropStart).
+    # Wait, if vocal is BEFORE Beat 16 (anacrouse of drop), we need to hear it.
+    # So we must switch to Original at Beat 15.5 or 15.
+    
+    # Let's switch at Beat 15 (last beat of the intro bar).
+    # Intro: 15 beats of (DropInst + Claps).
+    # Then: Original starting from (DropStart - 1 beat).
+    # This preserves the vocal pickup (anacrouse) that happens in that last beat.
+    # And since Original has the instrumental, the music continuity is kept.
+    # The claps will stop at beat 15.
+    
+    intro_15 = intro_with_claps[:(ms_16_beats - int(beat_ms))]
+    pickup_segment = original[max(0, drop_start - int(beat_ms)):]
+    
+    # Smooth transition (short crossfade 50ms to avoid click, but keep timing tight)
+    clap_in = intro_15.append(pickup_segment, crossfade=50)
     
     # Add Outro
     clap_in = clap_in + outro_inst
