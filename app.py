@@ -261,21 +261,27 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
 import requests
 from datetime import datetime
 
-# API Endpoint Configuration (to be set by user)
-API_ENDPOINT = os.environ.get('API_ENDPOINT', None)  # Set via environment variable or modify here
+# API Endpoint Configuration
+API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://track.idbyrivoli.com/upload')
+API_KEY = os.environ.get('API_KEY', '5X#JP5ifkSm?oE6@haMriYG$j!87BEfX@zg3CxcE')
 
 def send_track_info_to_api(track_data):
     """
-    Sends track information to external API endpoint.
+    Sends track information to external API endpoint with authentication.
     """
     if not API_ENDPOINT:
         print("API_ENDPOINT not configured, skipping API call")
         return
     
     try:
-        response = requests.post(API_ENDPOINT, json=track_data, timeout=10)
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {API_KEY}'
+        }
+        
+        response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=10)
         if response.status_code == 200:
-            print(f"Successfully sent track info to API: {track_data['Titre']}")
+            print(f"✓ API: {track_data['Titre']} ({track_data['Format']})")
         else:
             print(f"API error {response.status_code}: {response.text}")
     except Exception as e:
