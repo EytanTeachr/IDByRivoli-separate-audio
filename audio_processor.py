@@ -157,6 +157,22 @@ def create_clap_loop(bpm, beats=16):
     return loop
 
 def process_track(vocals_path, inst_path, original_path, bpm):
+    """
+    PROCÉDURE REPRODUCTIBLE - CLAP IN EDIT
+    
+    Structure imposée (NON NÉGOCIABLE):
+    1. Intro DJ : 16 temps (4 mesures) - Instrumental seul, PAS de clap
+    2. Clap In : 16 temps (4 mesures) - Instrumental + Claps sur 2 et 4 UNIQUEMENT
+    3. Body : Morceau original complet (à partir du temps 33)
+    4. Outro DJ : 32 temps (8 mesures) - Instrumental seul
+    
+    Contraintes:
+    - BPM identique à l'original (pas de time-stretch)
+    - Claps courts, punchys, club-ready
+    - Pas de modification mélodique
+    - Cuts propres sur la grille rythmique
+    """
+    
     vocals = AudioSegment.from_mp3(vocals_path)
     inst = AudioSegment.from_mp3(inst_path)
     original = AudioSegment.from_mp3(original_path)
@@ -165,181 +181,77 @@ def process_track(vocals_path, inst_path, original_path, bpm):
     ms_32_beats = 32 * beat_ms
     ms_16_beats = 16 * beat_ms
     
-    # Find Drop
-    drop_start = find_drop_start(inst, beat_ms)
-    
-    # Define Segments
-    drop_voc = vocals[drop_start : drop_start + ms_32_beats]
-    drop_inst = inst[drop_start : drop_start + ms_32_beats]
-    outro_inst = drop_inst # Re-use drop instrumental as DJ outro
-    
-    clap_loop_16 = create_clap_loop(bpm, 16)
-    fx_hit = generate_fx_hit()
-    
     edits = []
     
-    # Helper to clean up segments (fade in/out slightly to avoid clicks?)
-    # For DJ edits, hard cuts on grid are preferred if quantized.
+    # ========================================
+    # CLAP IN EDIT - PROCÉDURE PAS À PAS
+    # ========================================
     
-    # 1. Clap In (New Logic: "Extended Mix" Structure)
-    # Intro Part 1 (16 Measures = 64 Beats): Low Energy (Kick/Bass) - NO CLAP
-    # Intro Part 2 (16 Measures = 64 Beats): High Energy (Inst + Claps 2&4)
-    # Drop: Original Track
-    # Outro: 16 Measures Inst
+    # ÉTAPE 1: Extraire les blocs audio
+    intro_inst_16b = inst[:ms_16_beats]  # 16 premiers temps de l'instrumental
+    outro_inst_32b = inst[:ms_32_beats]  # 32 temps d'instrumental pour l'outro
     
-    # Define lengths in MS
-    beats_per_measure = 4
-    intro_measures = 16
-    intro_beats = intro_measures * beats_per_measure # 64 beats
+    # ÉTAPE 2: Créer la boucle de claps (16 temps, claps sur 2 et 4)
+    clap_loop = create_clap_loop(bpm, beats=16)
     
-    ms_intro_section = intro_beats * beat_ms
+    # ÉTAPE 3: Section "Clap In" = Instrumental + Claps superposés
+    clap_in_section = intro_inst_16b.overlay(clap_loop)
     
-    # --- PHASE 1: Low Energy Intro (64 Beats) ---
-    # We take a 64-beat segment of the instrumental (Drop or Intro).
-    # If the drop is short (32 beats), we loop it twice.
-    # To simulate "Kick/Bass only", we apply Low Pass Filter.
+    # ÉTAPE 4: Assembler le Clap In Edit
+    # [Intro 16b] + [ClapIn 16b] + [Original à partir du temps 33] + [Outro 32b]
+    clap_in_edit = intro_inst_16b + clap_in_section + original[ms_32_beats:] + outro_inst_32b
     
-    # Get 64 beats of instrumental.
-    # Drop Inst is usually 32 beats. Let's loop it 2 times.
-    inst_32b = drop_inst[:ms_32_beats]
-    inst_64b = inst_32b + inst_32b # Loop twice
+    edits.append(("Clap In", clap_in_edit))
     
-    intro_part_1 = inst_64b.low_pass_filter(400)
+    # ========================================
+    # AUTRES EDITS (Versions Courtes)
+    # ========================================
     
-    # --- PHASE 2: Clap In Section (64 Beats) ---
-    # Full frequency instrumental (64 beats) + Claps on 2 & 4.
+    # Find Drop for vocal extraction (pour les autres versions qui en ont besoin)
+    drop_start = find_drop_start(inst, beat_ms)
+    drop_voc = vocals[drop_start : drop_start + ms_32_beats]
+    drop_inst = inst[drop_start : drop_start + ms_32_beats]
     
-    # Create Clap Loop for 64 beats
-    clap_loop_64 = create_clap_loop(bpm, beats=intro_beats)
+    fx_hit = generate_fx_hit()
     
-    intro_part_2 = inst_64b.overlay(clap_loop_64)
-    
-    # --- TRANSITION TO DROP ---
-    # Cut claps 1 beat before the end of Phase 2 to allow Vocal Pickup.
-    # Phase 2 length = ms_intro_section.
-    
-    intro_part_2_cut = intro_part_2[:(len(intro_part_2) - int(beat_ms))]
-    
-    # Original Pickup (start 1 beat before drop)
-    original_pickup = original[max(0, drop_start - int(beat_ms)):]
-    
-    # --- OUTRO ---
-    # 16 Measures (64 beats) of Instrumental
-    # We can reuse inst_64b
-    outro_section = inst_64b
-    
-    # Construct Final Track
-    clap_in = intro_part_1 + intro_part_2_cut + original_pickup + outro_section
-    
-    edits.append(("Extended Mix (Clap In)", clap_in))
-    
-    # 2. Acap In (Drop Vocal Only)
-    # 16 beats acapella (first 16 beats of drop vocal) -> Drop -> End -> Outro
-    # "strictly the lead vocal taken from the 32-beat drop section"
-    # "starts with 16 beats of acapella only"
+    # 2. Acap In
     acap_intro = drop_voc[:ms_16_beats]
-    acap_in = acap_intro + original[drop_start:] + outro_inst
+    acap_in = acap_intro + original[ms_16_beats:] + outro_inst_32b
     edits.append(("Acap In", acap_in))
     
     # 3. Acap Out
-    # "after the final drop... acapella outro must last 32 beats... no instrumental outro"
-    # We will use the drop vocal as the outro acapella.
-    # We need to append this to the FULL track (or from drop?).
-    # "Create a version where... all instrumental elements are removed... leaving only the lead vocal"
-    # This implies playing the track until the end, then ensuring the outro is Acapella.
-    # But usually "Acap Out" replaces the original outro.
-    # "After the final drop" -> Identify final drop? Or just append to the main part?
-    # Let's assume we take the whole Original track, try to detect the end, and append the Acapella?
-    # Or cut the original outro and replace with Acapella?
-    # Safer: Original Track + Drop Acapella (32 beats).
-    # "Acap Out... after the final drop... leaving only the lead vocal taken from the 32-beat drop section."
-    # This phrasing suggests replacing the existing outro with the Drop Vocal.
-    # But we don't know where the "final drop" ends in the original.
-    # Strategy: Original Track + Drop Vocal (32 beats). (Effectively an Acapella Outro).
     acap_out_edit = original + drop_voc
     edits.append(("Acap Out", acap_out_edit))
 
     # 4. Intro (Instrumental Intro)
-    # "32-beat instrumental intro only, no vocals."
-    # "After the intro, introduce the vocal together with the instrumental, preserving the original drop structure."
-    # "At the end... add 32-beat inst outro"
-    # Logic: Instrumental version of first 32 beats -> Then Original (starting at 32 beats) -> ... -> Outro
-    # This effectively removes vocals from the first 32 beats.
-    intro_inst_32 = inst[:ms_32_beats]
-    intro_edit = intro_inst_32 + original[ms_32_beats:] + outro_inst
+    intro_edit = intro_inst_16b + intro_inst_16b + original[ms_32_beats:] + outro_inst_32b
     edits.append(("Intro", intro_edit))
     
     # 5. Short
-    # "Short instrumental intro" -> Let's use 16 beats of Intro Inst.
-    # "Only one break and one drop".
-    # Structure: Intro(16) -> Break(before drop, 16) -> Drop(32) -> Outro(32)
-    # Break logic: 16 beats before drop_start.
     break_start = max(0, drop_start - ms_16_beats)
-    break_segment = original[break_start : drop_start] # Use original for break (might have build-up vocals)
-    # Wait, "Short instrumental intro".
+    break_segment = original[break_start : drop_start]
     intro_short = inst[:ms_16_beats]
     
-    # What if break_start < 16 beats? 
-    # If drop is early, we might overlap.
-    # Assuming drop is at least 32 beats in.
-    
-    short_edit = intro_short + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    short_edit = intro_short + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst_32b
     edits.append(("Short", short_edit))
     
     # 6. Short Acap In
-    # "16 beats of acapella only... using lead vocal from 32-beat drop"
-    # "After acapella intro, include only one break and one drop"
-    # "Add 32-beat inst outro"
-    acap_intro_short = drop_voc[:ms_16_beats]
-    short_acap_in = acap_intro_short + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
+    short_acap_in = acap_intro + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst_32b
     edits.append(("Short Acap In", short_acap_in))
     
     # 7. Short Clap In
-    # "16 beats of claps only" -> Modified: Claps + Melody
-    # "After clap intro, include only one break and one drop"
-    # Use the same Phase 2 Intro (16 beats with claps)
-    # Then transition to Break Segment
-    
-    # We need to cut Phase 2 intro slightly (1 beat) to allow for smooth entry into Break?
-    # Breaks usually start on the '1'.
-    # If the break has pickup notes, we might need crossfade.
-    # Let's keep it simple: 16 beats Intro -> Break Segment (start).
-    # Since 'intro_phase_2' is full 16 beats, we can use it directly if no pickup needed.
-    # Or use the same logic (15 beats + pickup).
-    # Let's use 16 beats full for Short Clap In to keep it simple unless specified.
-    
-    # ERROR FIX: 'intro_phase_2' was defined inside "Clap In" block which is local scope if edits are appended.
-    # But wait, Python scope is function level, so 'intro_phase_2' should be available if defined above.
-    # Ah, I see: I defined 'intro_part_2' in the block above, not 'intro_phase_2'.
-    # Variable name mismatch.
-    
-    short_clap_in = intro_part_2 + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst
-    
+    short_clap_in = clap_in_section + break_segment + original[drop_start : drop_start + ms_32_beats] + outro_inst_32b
     edits.append(("Short Clap In", short_clap_in))
     
     # 8. Acap In / Acap Out
-    # "starts with 16 beats of acapella only"
-    # "main body of the track remains unchanged"
-    # "end of final drop... keep only the same drop vocal for 32 beats"
-    # Logic: Acap Intro -> Original -> Drop Vocal Outro
-    acap_in_out = drop_voc[:ms_16_beats] + original + drop_voc
+    acap_in_out = acap_intro + original + drop_voc
     edits.append(("Acap In Acap Out", acap_in_out))
     
     # 9. Slam
-    # "Single FX hit"
-    # "Immediately after FX, start track directly from drop"
-    # "Add 32-beat inst outro"
-    slam_edit = fx_hit + original[drop_start:] + outro_inst
+    slam_edit = fx_hit + original[drop_start:] + outro_inst_32b
     edits.append(("Slam", slam_edit))
     
     # 10. Short Acap Out
-    # "Shortened version with only one drop (32 beats)"
-    # "After the drop, remove all inst... keep only lead vocal... for 32 beats"
-    # Structure: (Intro/Break?) -> Drop -> Acapella Outro.
-    # Spec says "Shortened version with only one drop". Doesn't explicitly mention intro/break.
-    # But usually a track needs *some* buildup.
-    # "Short" (v5) had intro/break.
-    # Let's assume minimal structure: Break -> Drop -> Acapella Outro.
     short_acap_out = break_segment + original[drop_start : drop_start + ms_32_beats] + drop_voc
     edits.append(("Short Acap Out", short_acap_out))
     
