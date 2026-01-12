@@ -270,7 +270,7 @@ def send_track_info_to_api(track_data):
     Sends track information to external API endpoint with authentication.
     """
     if not API_ENDPOINT:
-        print("API_ENDPOINT not configured, skipping API call")
+        print("⚠️  API_ENDPOINT not configured, skipping API call")
         return
     
     try:
@@ -279,13 +279,23 @@ def send_track_info_to_api(track_data):
             'Authorization': f'Bearer {API_KEY}'
         }
         
+        print(f"\n{'='*60}")
+        print(f"📤 ENVOI API → {API_ENDPOINT}")
+        print(f"   Titre: {track_data.get('Titre', 'N/A')}")
+        print(f"   Type: {track_data.get('Type', 'N/A')}")
+        print(f"   Format: {track_data.get('Format', 'N/A')}")
+        print(f"   BPM: {track_data.get('BPM', 'N/A')}")
+        print(f"{'='*60}")
+        
         response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=10)
+        
         if response.status_code == 200:
-            print(f"✓ API: {track_data['Titre']} ({track_data['Format']})")
+            print(f"✅ API SUCCESS: {track_data['Titre']} ({track_data['Format']})")
         else:
-            print(f"API error {response.status_code}: {response.text}")
+            print(f"❌ API ERROR {response.status_code}: {response.text[:200]}")
+            
     except Exception as e:
-        print(f"Failed to send to API: {e}")
+        print(f"❌ API EXCEPTION: {e}")
 
 def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     """
