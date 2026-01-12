@@ -64,7 +64,7 @@ def download_all_zip():
             if os.path.exists(track_dir):
                 for root, dirs, files in os.walk(track_dir):
                     for file in files:
-                        if file.endswith('.mp3'): 
+                        if file.lower().endswith(('.mp3', '.wav')): 
                             file_path = os.path.join(root, file)
                             arcname = os.path.join(track_name, file)
                             zf.write(file_path, arcname)
