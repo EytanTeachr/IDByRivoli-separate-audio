@@ -299,6 +299,11 @@ def upload_file():
     global job_status
     
     if job_status['state'] == 'processing':
+        # Check if the process is actually running/alive?
+        # Sometimes state gets stuck if thread died silently.
+        # But for now, we assume user is impatient or trying to upload while busy.
+        # Let's allow FORCE reset if they reload page?
+        # No, that might break current job.
         return jsonify({'error': 'Un traitement est déjà en cours. Veuillez patienter.'}), 409
 
     if 'files[]' not in request.files:
