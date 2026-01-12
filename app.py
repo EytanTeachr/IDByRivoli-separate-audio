@@ -7,7 +7,7 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX
 from pydub import AudioSegment
 import librosa
 import numpy as np
@@ -115,11 +115,15 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         
         # Preserve/Copy metadata from original
         if original_tags:
+            # Artist (PRESERVE ORIGINAL - do not change to "ID By Rivoli")
+            if 'TPE1' in original_tags:
+                tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
+            
             # Album
             if 'TALB' in original_tags:
                 tags.add(TALB(encoding=3, text=original_tags['TALB'].text))
             
-            # Date
+            # Date (PRESERVE FULL DATE FORMAT if available)
             if 'TDRC' in original_tags:
                 tags.add(TDRC(encoding=3, text=original_tags['TDRC'].text))
             
@@ -134,25 +138,25 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             # ISRC
             if 'TSRC' in original_tags:
                 tags.add(TSRC(encoding=3, text=original_tags['TSRC'].text))
-            
-            # Publisher (override with ID By Rivoli)
-            tags.add(TPUB(encoding=3, text='ID By Rivoli'))
-        else:
-            # Default values if no original metadata
-            tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # Override/Add core fields
+        # Add/Override with ID By Rivoli specific fields
         tags.add(TIT2(encoding=3, text=title))
-        tags.add(TPE1(encoding=3, text=artist))
         tags.add(TBPM(encoding=3, text=str(bpm)))
+        tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        
+        # Add Media field
+        tags.add(TMED(encoding=3, text='ID By Rivoli'))
         
         # Calculate and add length
         audio_segment = AudioSegment.from_mp3(filepath)
         length_ms = len(audio_segment)
         tags.add(TLEN(encoding=3, text=str(length_ms)))
         
-        # Add ID By Rivoli comment
-        tags.add(COMM(encoding=3, lang='eng', desc='ID By Rivoli', text='www.idbyrivoli.com'))
+        # Add ID By Rivoli comment / description
+        tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
+        
+        # Add Website URL
+        tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         # Add Artwork - ID By Rivoli Cover as PRIMARY
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
