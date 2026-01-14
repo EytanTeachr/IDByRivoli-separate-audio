@@ -266,27 +266,70 @@ def update_metadata(filepath, artist, title, original_path, bpm):
 
 def update_metadata_wav(filepath, artist, title, original_path, bpm):
     """
-    Updates WAV file metadata using RIFF INFO chunks (native WAV metadata).
-    Note: WAV files don't support embedded cover art in a standard way.
-    Cover art is only available in MP3 versions.
+    Adds ID3v2 tags to WAV file using mutagen.wave (proper method).
+    This embeds ID3 tags correctly without corrupting the WAV structure.
     """
     try:
         from mutagen.wave import WAVE
         
-        # Open WAV file
+        # Read original file metadata for reference
+        try:
+            original_audio = MP3(original_path, ID3=ID3)
+            original_tags = original_audio.tags
+        except:
+            original_tags = None
+        
+        # Open WAV file and add ID3 tags properly
         audio = WAVE(filepath)
         
-        # WAV uses INFO chunks for metadata, but mutagen.wave has limited support
-        # We'll add basic ID3 tags that some players can read
-        # But we need to be careful not to corrupt the file
+        # Add ID3 tag container if not present
+        if audio.tags is None:
+            audio.add_tags()
         
-        # For now, just verify the file is valid and skip metadata
-        # WAV files in professional audio workflows typically don't have embedded metadata
-        if audio.info.length > 0:
-            print(f"   📄 WAV valide: {os.path.basename(filepath)} ({audio.info.length:.1f}s)")
+        # Add core fields
+        audio.tags.add(TIT2(encoding=3, text=title))
+        
+        if original_tags and 'TPE1' in original_tags:
+            audio.tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
+        
+        audio.tags.add(TBPM(encoding=3, text=str(bpm)))
+        audio.tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        
+        # Add ID By Rivoli Cover
+        cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
+        if os.path.exists(cover_path):
+            with open(cover_path, 'rb') as img:
+                audio.tags.add(APIC(
+                    encoding=3,
+                    mime='image/jpeg',
+                    type=3,  # Cover (front)
+                    desc='ID By Rivoli',
+                    data=img.read()
+                ))
+        
+        # Add original cover as secondary if exists
+        if original_tags:
+            for apic_key in original_tags.keys():
+                if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
+                    try:
+                        original_apic = original_tags[apic_key]
+                        audio.tags.add(APIC(
+                            encoding=original_apic.encoding,
+                            mime=original_apic.mime,
+                            type=0,  # Other
+                            desc='Original',
+                            data=original_apic.data
+                        ))
+                        break
+                    except:
+                        pass
+        
+        # Save properly embedded in WAV structure
+        audio.save()
+        print(f"   ✅ WAV metadata + cover ajoutés: {os.path.basename(filepath)}")
         
     except Exception as e:
-        print(f"   ⚠️ WAV metadata skipped: {e}")
+        print(f"   ⚠️ WAV metadata error: {e}")
 
 import requests
 from datetime import datetime
