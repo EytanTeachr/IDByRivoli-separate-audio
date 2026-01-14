@@ -637,22 +637,56 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             'wav': wav_url
         }
     
-    # Export 3 versions: Main, Acapella, Instrumental
-    log_message(f"Génération des 3 versions pour : {base_filename}")
+    # Detect if track contains vocals by analyzing the vocals file
+    def has_vocals(vocals_file_path, threshold_db=-35):
+        """
+        Analyzes vocals track to detect if it contains actual vocals.
+        Returns True if vocals detected, False if mostly silence (instrumental track).
+        """
+        try:
+            vocals_audio = AudioSegment.from_mp3(vocals_file_path)
+            # Calculate RMS (Root Mean Square) level in dBFS
+            rms_db = vocals_audio.dBFS
+            # Calculate peak level
+            peak_db = vocals_audio.max_dBFS
+            
+            print(f"   🎤 Analyse vocale: RMS={rms_db:.1f}dB, Peak={peak_db:.1f}dB (seuil={threshold_db}dB)")
+            
+            # If RMS is below threshold, consider it as no vocals (instrumental)
+            if rms_db < threshold_db:
+                return False
+            return True
+        except Exception as e:
+            print(f"   ⚠️ Erreur analyse vocale: {e}")
+            return True  # Default to True (export acapella) if analysis fails
     
-    # 1. Main (Original)
+    # Check if vocals exist
+    vocals_detected = False
+    if vocals_path and os.path.exists(vocals_path):
+        vocals_detected = has_vocals(vocals_path)
+        if vocals_detected:
+            log_message(f"🎤 Voix détectées → Export Main + Acapella + Instrumental")
+        else:
+            log_message(f"🎵 Instrumental détecté (pas de voix) → Export Main + Instrumental uniquement")
+    
+    # Export versions based on detection
+    log_message(f"Génération des versions pour : {base_filename}")
+    
+    # 1. Main (Original) - Always
     original = AudioSegment.from_mp3(original_path)
     edits.append(export_edit(original, "Main"))
     
-    # 2. Acapella (Vocals only) - if available
-    if vocals_path and os.path.exists(vocals_path):
+    # 2. Acapella (Vocals only) - Only if vocals detected
+    if vocals_path and os.path.exists(vocals_path) and vocals_detected:
         vocals = AudioSegment.from_mp3(vocals_path)
         edits.append(export_edit(vocals, "Acapella"))
         log_message(f"✓ Version Acapella créée")
+    elif vocals_path and os.path.exists(vocals_path) and not vocals_detected:
+        log_message(f"⏭️ Acapella ignorée (pas de voix détectées)")
     else:
         log_message(f"⚠️ Pas de fichier vocals pour Acapella")
     
-    # 3. Instrumental (No vocals) - if available
+    # 3. Instrumental (No vocals) - Always if available
     if inst_path and os.path.exists(inst_path):
         instrumental = AudioSegment.from_mp3(inst_path)
         edits.append(export_edit(instrumental, "Instrumental"))
