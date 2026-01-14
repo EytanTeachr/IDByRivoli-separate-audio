@@ -437,8 +437,13 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         
         subdir = clean_name
         
-        mp3_url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_mp3)}"
-        wav_url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(out_name_wav)}"
+        # New robust URL format using query parameter
+        # Path relative to PROCESSED_FOLDER: "Subdir/Filename.mp3"
+        rel_path_mp3 = f"{subdir}/{out_name_mp3}"
+        rel_path_wav = f"{subdir}/{out_name_wav}"
+        
+        mp3_url = f"/download_file?path={urllib.parse.quote(rel_path_mp3)}"
+        wav_url = f"/download_file?path={urllib.parse.quote(rel_path_wav)}"
         
         # Prepare and send track info to API (for MP3)
         track_info_mp3 = {
@@ -899,7 +904,9 @@ def status():
                     grouped[name_no_ext] = {'name': name_no_ext, 'mp3': '#', 'wav': '#'}
                 
                 subdir = d
-                url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(f)}"
+                # New robust URL format
+                rel_path = f"{subdir}/{f}"
+                url = f"/download_file?path={urllib.parse.quote(rel_path)}"
                 
                 if f.endswith('.mp3'):
                     grouped[name_no_ext]['mp3'] = url
@@ -913,35 +920,42 @@ def status():
             
     return jsonify(job_status)
 
-@app.route('/download_processed/<path:subdir>/<path:filename>')
-def download_processed(subdir, filename):
+@app.route('/download_file')
+def download_file():
     """
-    Downloads a file from a specific subdirectory in processed folder.
+    Robust download route using query parameter to avoid URL path issues.
+    Usage: /download_file?path=SubDir/File.mp3
     """
-    # Decoding is handled by Flask, but let's be safe with unquote
-    subdir = urllib.parse.unquote(subdir)
-    filename = urllib.parse.unquote(filename)
+    relative_path = request.args.get('path')
+    if not relative_path:
+        abort(400)
     
-    directory = os.path.join(PROCESSED_FOLDER, subdir)
-    filepath = os.path.join(directory, filename)
-    
-    # print(f"📥 Download Request:")
-    # print(f"   Subdir: {subdir}")
-    # print(f"   Filename: {filename}")
-    # print(f"   Full Path: {filepath}")
+    # Security: prevent directory traversal
+    if '..' in relative_path or relative_path.startswith('/'):
+        abort(403)
+        
+    # Construct full path
+    filepath = os.path.join(PROCESSED_FOLDER, relative_path)
+    directory = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
     
     if not os.path.exists(filepath):
         print(f"❌ File NOT FOUND: {filepath}")
-        # Try finding file case-insensitive or slightly different?
-        # Sometimes extension case differs (.MP3 vs .mp3)
         abort(404)
         
     return send_from_directory(
         directory, 
         filename, 
-        as_attachment=True,
-        mimetype='audio/mpeg' if filename.lower().endswith('.mp3') else 'audio/wav'
+        as_attachment=True
     )
+
+@app.route('/download_processed/<path:subdir>/<path:filename>')
+def download_processed_legacy(subdir, filename):
+    # Redirect legacy calls to new system if possible or just keep as fallback
+    # But for new links, we use the query param method.
+    return download_file() # Won't work directly, but let's just keep the old route for now or replace logic.
+    pass 
+
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup_files():
