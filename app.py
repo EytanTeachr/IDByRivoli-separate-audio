@@ -316,7 +316,7 @@ def send_track_info_to_api(track_data):
         print(f"   BPM: {track_data.get('BPM', 'N/A')}")
         print(f"{'='*60}")
         
-        response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=10)
+        response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=30)
         
         if response.status_code == 200:
             print(f"✅ API SUCCESS: {track_data['Titre']} ({track_data['Format']})")
