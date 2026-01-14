@@ -590,8 +590,8 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         from concurrent.futures import ThreadPoolExecutor
         
         clean_name, _ = clean_filename(base_filename)
-        out_name_mp3 = f"{clean_name} {suffix}.mp3"
-        out_name_wav = f"{clean_name} {suffix}.wav"
+        out_name_mp3 = f"{clean_name} - {suffix}.mp3"
+        out_name_wav = f"{clean_name} - {suffix}.wav"
         
         out_path_mp3 = os.path.join(base_output_path, out_name_mp3)
         out_path_wav = os.path.join(base_output_path, out_name_wav)
@@ -599,11 +599,11 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         # Parallel export of MP3 and WAV for speed
         def export_mp3():
             audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
-            update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
+            update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} - {suffix}", original_path, bpm)
         
         def export_wav():
             audio_segment.export(out_path_wav, format="wav")
-            update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
+            update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} - {suffix}", original_path, bpm)
         
         with ThreadPoolExecutor(max_workers=2) as executor:
             executor.submit(export_mp3)
@@ -654,7 +654,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         track_info_mp3 = {
             'type': suffix,
             'format': 'MP3',
-            'name': f"{clean_name} {suffix}",
+            'name': f"{clean_name} - {suffix}",
             'url': mp3_url
         }
         track_data_mp3 = prepare_track_metadata(track_info_mp3, original_path, bpm)
@@ -665,7 +665,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         track_info_wav = {
             'type': suffix,
             'format': 'WAV',
-            'name': f"{clean_name} {suffix}",
+            'name': f"{clean_name} - {suffix}",
             'url': wav_url
         }
         track_data_wav = prepare_track_metadata(track_info_wav, original_path, bpm)
@@ -673,7 +673,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             send_track_info_to_api(track_data_wav)
         
         return {
-            'name': f"{clean_name} {suffix}",
+            'name': f"{clean_name} - {suffix}",
             'mp3': mp3_url,
             'wav': wav_url
         }
