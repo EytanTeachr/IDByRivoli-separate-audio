@@ -283,14 +283,19 @@
             <div class="upload-area" id="dropZone">
                 <label class="file-label">
                     📁 DRAG & DROP ou 
-                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('fileInput').click()">SÉLECTIONNER FICHIERS</span> / 
-                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('folderInput').click()">DOSSIER</span>
-                    <span class="file-sublabel">(Jusqu'à 100 fichiers MP3)</span>
+                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('fileInput').click()">AJOUTER FICHIERS</span> / 
+                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('folderInput').click()">AJOUTER DOSSIER</span>
+                    <span class="file-sublabel">(Jusqu'à 1000 fichiers MP3 - Cumulable)</span>
                 </label>
                 <!-- Standard File Input -->
                 <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple style="display: none;">
                 <!-- Folder Input -->
                 <input type="file" id="folderInput" name="files[]" webkitdirectory directory multiple style="display: none;">
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                <div id="fileCount" style="font-weight: bold; color: #fff;">0 fichier(s) prêt(s)</div>
+                <button type="button" onclick="clearFiles()" style="width: auto; padding: 10px 20px; margin: 0; background-color: #333; font-size: 0.8em;">🗑️ Vider la liste</button>
             </div>
             
             <div id="fileList"></div>
@@ -333,24 +338,41 @@
         });
 
         function handleNewFiles(files) {
-            // Filter for MP3s and avoid duplicates if needed, or just replace
-            // Replacing current selection for simplicity and clarity
-            selectedFiles = files.filter(f => f.name.toLowerCase().endsWith('.mp3'));
+            // Filter for MP3s
+            const newMp3s = files.filter(f => f.name.toLowerCase().endsWith('.mp3'));
+            
+            // Add to existing list, avoiding duplicates (by name + size to be safe)
+            let addedCount = 0;
+            newMp3s.forEach(newFile => {
+                const exists = selectedFiles.some(existing => 
+                    existing.name === newFile.name && existing.size === newFile.size
+                );
+                if (!exists) {
+                    selectedFiles.push(newFile);
+                    addedCount++;
+                }
+            });
+
             updateFileList();
+        }
+
+        function clearFiles() {
+            selectedFiles = [];
+            updateFileList();
+            // Reset inputs to allow selecting same files again if needed
+            document.getElementById('fileInput').value = '';
+            document.getElementById('folderInput').value = '';
         }
 
         function updateFileList() {
             const list = document.getElementById('fileList');
+            const countLabel = document.getElementById('fileCount');
+            
             list.innerHTML = '';
+            countLabel.textContent = `${selectedFiles.length} fichier(s) prêt(s)`;
             
             if (selectedFiles.length > 0) {
-                const count = document.createElement('div');
-                count.style.fontWeight = 'bold';
-                count.style.marginBottom = '10px';
-                count.textContent = `${selectedFiles.length} fichier(s) MP3 sélectionné(s)`;
-                list.appendChild(count);
-
-                // List individual files (limit to first 50 to avoid freezing UI if 1000s)
+                // List individual files (limit to first 50)
                 const limit = 50;
                 for(let i=0; i<Math.min(selectedFiles.length, limit); i++) {
                     const item = document.createElement('div');
@@ -363,6 +385,12 @@
                     more.textContent = `...et ${selectedFiles.length - limit} autres.`;
                     list.appendChild(more);
                 }
+            } else {
+                const empty = document.createElement('div');
+                empty.style.color = '#666';
+                empty.style.fontStyle = 'italic';
+                empty.textContent = 'Aucun fichier dans la liste.';
+                list.appendChild(empty);
             }
         }
 
