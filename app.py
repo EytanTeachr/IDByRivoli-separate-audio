@@ -173,9 +173,11 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         # 1. Title (from parameter)
         tags.add(TIT2(encoding=3, text=title))
         
-        # 2. Artist (from original)
+        # 2. Artist (from original, formatted with , and &)
         if original_tags and 'TPE1' in original_tags:
-            tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
+            artist_raw = str(original_tags['TPE1'].text[0]) if original_tags['TPE1'].text else ''
+            artist_formatted = format_artists(artist_raw)
+            tags.add(TPE1(encoding=3, text=artist_formatted))
         
         # 3. Album (from original)
         if original_tags and 'TALB' in original_tags:
@@ -291,7 +293,9 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         audio.tags.add(TIT2(encoding=3, text=title))
         
         if original_tags and 'TPE1' in original_tags:
-            audio.tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
+            artist_raw = str(original_tags['TPE1'].text[0]) if original_tags['TPE1'].text else ''
+            artist_formatted = format_artists(artist_raw)
+            audio.tags.add(TPE1(encoding=3, text=artist_formatted))
         
         if bpm is not None:
             audio.tags.add(TBPM(encoding=3, text=str(bpm)))
