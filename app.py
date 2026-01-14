@@ -660,6 +660,107 @@ def index():
     version_info = get_git_info()
     return render_template('index.html', version_info=version_info)
 
+import queue
+
+# Global Queue for processing tracks
+track_queue = queue.Queue()
+
+# Worker thread function
+def worker():
+    while True:
+        try:
+            filename = track_queue.get()
+            if filename is None:
+                break
+            
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            process_single_track(filepath, filename)
+            
+            track_queue.task_done()
+        except Exception as e:
+            print(f"Worker Error: {e}")
+            log_message(f"Erreur Worker: {e}")
+
+# Start worker thread
+worker_thread = threading.Thread(target=worker, daemon=True)
+worker_thread.start()
+
+# Modified process function for SINGLE track
+def process_single_track(filepath, filename):
+    global job_status
+    
+    try:
+        job_status['state'] = 'processing'
+        job_status['current_filename'] = filename
+        job_status['current_step'] = "Séparation IA..."
+        log_message(f"🚀 Début traitement : {filename}")
+        
+        # 1. Run Demucs
+        command = [
+            'python3', '-m', 'demucs',
+            '--two-stems=vocals',
+            '-n', 'htdemucs',
+            '--mp3',
+            '--mp3-bitrate', '320',
+            '-j', '4', 
+            '-o', OUTPUT_FOLDER,
+            filepath
+        ]
+        
+        process = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True,
+            universal_newlines=True
+        )
+        
+        # Wait for Demucs
+        process.wait()
+        
+        if process.returncode != 0:
+            log_message(f"❌ Erreur Demucs pour {filename}")
+            return
+
+        # 2. Generate Edits
+        job_status['current_step'] = "Génération Edits DJ..."
+        track_name = os.path.splitext(filename)[0]
+        source_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)
+        inst_path = os.path.join(source_dir, 'no_vocals.mp3')
+        vocals_path = os.path.join(source_dir, 'vocals.mp3')
+        
+        if os.path.exists(inst_path) and os.path.exists(vocals_path):
+            clean_name, _ = clean_filename(filename)
+            track_output_dir = os.path.join(PROCESSED_FOLDER, clean_name)
+            os.makedirs(track_output_dir, exist_ok=True)
+            
+            edits = create_edits(vocals_path, inst_path, filepath, track_output_dir, filename)
+            
+            # Add to results
+            job_status['results'].append({
+                'original': clean_name,
+                'edits': edits
+            })
+            log_message(f"✅ Terminé : {clean_name}")
+        else:
+            log_message(f"⚠️ Fichiers audio manquants pour {filename}")
+
+    except Exception as e:
+        log_message(f"❌ Erreur critique {filename}: {e}")
+
+@app.route('/enqueue_file', methods=['POST'])
+def enqueue_file():
+    data = request.json
+    filename = data.get('filename')
+    
+    if filename:
+        track_queue.put(filename)
+        q_size = track_queue.qsize()
+        log_message(f"📥 Ajouté à la file : {filename} (File d'attente: {q_size})")
+        return jsonify({'message': 'Queued', 'queue_size': q_size})
+    
+    return jsonify({'error': 'No filename'}), 400
+
 @app.route('/upload_chunk', methods=['POST'])
 def upload_chunk():
     """
@@ -728,6 +829,8 @@ def upload_file():
 
 @app.route('/status')
 def status():
+    # Update queue info in status
+    job_status['queue_size'] = track_queue.qsize()
     return jsonify(job_status)
 
 @app.route('/download_processed/<path:subdir>/<path:filename>')

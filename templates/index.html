@@ -300,7 +300,7 @@
             
             <div id="fileList"></div>
 
-            <button type="submit" id="submitBtn">Lancer le Traitement (Séparation + Edits)</button>
+            <button type="submit" id="submitBtn">Lancer l'Upload et le Traitement Automatique</button>
         </form>
 
         <div id="progressContainer" class="progress-container">
@@ -505,7 +505,7 @@
             const statusText = document.getElementById('statusText');
             const logContainer = document.getElementById('logContainer');
             
-            statusText.textContent = "Démarrage de l'upload séquentiel...";
+            statusText.textContent = "Démarrage de l'upload séquentiel et mise en file d'attente...";
             
             let uploadedCount = 0;
             let totalFiles = selectedFiles.length;
@@ -536,24 +536,28 @@
                 });
             };
 
-            // Process uploads sequentially (chunk by chunk or one by one)
-            // One by one is safest for strict server limits, but we can do small parallel batches if needed.
-            // Let's stick to strict 1-by-1 to be safe as requested.
-            
+            // Start polling for status immediately so user sees queue processing
+            startPolling();
+
             for (let i = 0; i < totalFiles; i++) {
                 const file = selectedFiles[i];
                 const percentComplete = Math.round(((i) / totalFiles) * 100);
                 
                 progressBar.style.width = percentComplete + '%';
-                statusText.textContent = `UPLOAD EN COURS : ${i + 1}/${totalFiles} fichiers (${percentComplete}%)`;
+                statusText.textContent = `UPLOAD EN COURS : ${i + 1}/${totalFiles} (${percentComplete}%) - Traitement en arrière-plan...`;
                 
-                // Add log entry for start of upload
-                // logContainer.innerHTML += `<div class="log-entry">Upload: ${file.name}...</div>`;
-                // logContainer.scrollTop = logContainer.scrollHeight;
-
                 try {
+                    // 1. Upload File
                     await uploadSingleFile(file);
                     uploadedCount++;
+                    
+                    // 2. Enqueue for Processing IMMEDIATELY
+                    await fetch('/enqueue_file', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ filename: file.name })
+                    });
+
                 } catch (error) {
                     console.error(`Failed to upload ${file.name}:`, error);
                     failedFiles.push(file.name);
@@ -563,35 +567,16 @@
 
             // All uploads finished
             progressBar.style.width = '100%';
-            
-            if (uploadedCount === 0) {
-                alert("Tous les uploads ont échoué.");
-                document.getElementById('submitBtn').disabled = false;
-                return;
-            }
-
-            statusText.textContent = `Upload terminé (${uploadedCount}/${totalFiles}). Démarrage du traitement...`;
+            statusText.textContent = `Uploads terminés. Le traitement continue en arrière-plan.`;
             
             if (failedFiles.length > 0) {
                 logContainer.innerHTML += `<div class="log-entry" style="color:orange;">⚠️ ${failedFiles.length} fichiers n'ont pas pu être uploadés.</div>`;
             }
 
-            // Call start_processing
-            try {
-                const response = await fetch('/start_processing', { method: 'POST' });
-                const result = await response.json();
-                
-                if (response.ok) {
-                    logContainer.innerHTML += `<div class="log-entry">✅ Traitement déclenché avec succès.</div>`;
-                    startPolling();
-                } else {
-                    throw new Error(result.error || 'Erreur inconnue au lancement du traitement');
-                }
-            } catch (error) {
-                alert('Erreur au lancement du traitement: ' + error.message);
-                document.getElementById('submitBtn').disabled = false;
-            }
-            // --- IMPROVED UPLOAD LOGIC END ---
+            // Keep submit button disabled to avoid double submission, 
+            // but maybe allow "Clear & New Batch" later.
+            // document.getElementById('submitBtn').disabled = false;
+
         });
 
         function startPolling() {
