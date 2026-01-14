@@ -34,11 +34,21 @@ pip install --ignore-installed -r requirements.txt
 ### 4. Lancer l'application
 
 ```bash
+# Port par défaut (8888)
 python app.py
+
+# Ou avec un port personnalisé
+python app.py -p 8889
+python app.py --port 9000
 ```
 
-L'application sera accessible sur le port **8888** :
-`https://[votre-pod-id]-8888.proxy.runpod.net/`
+L'application sera accessible sur le port choisi :
+`https://[votre-pod-id]-[PORT].proxy.runpod.net/`
+
+**Exemples pour plusieurs pods simultanés :**
+- Pod 1 : `python app.py -p 8888` → `https://xxx-8888.proxy.runpod.net/`
+- Pod 2 : `python app.py -p 8889` → `https://xxx-8889.proxy.runpod.net/`
+- Pod 3 : `python app.py -p 8890` → `https://xxx-8890.proxy.runpod.net/`
 
 ## Commandes utiles
 
@@ -48,17 +58,6 @@ L'application sera accessible sur le port **8888** :
 cd IDByRivoli-separate-audio
 git pull
 python app.py
-```
-
-### Si le port 8888 est déjà utilisé
-
-```bash
-# Trouver et tuer le processus qui utilise le port
-lsof -i :8888 | awk 'NR>1 {print $2}' | xargs kill -9
-
-# Ou relancer avec un port différent (modifier app.py)
-# Changer la ligne : app.run(host='0.0.0.0', port=8888, debug=True)
-# Par exemple : app.run(host='0.0.0.0', port=8889, debug=True)
 ```
 
 ### Lancer en arrière-plan

@@ -720,8 +720,11 @@ def download_processed(subdir, filename):
     )
 
 if __name__ == '__main__':
-    # Use environment variable for port, or default to 5001. 
-    # RunPod often expects 8888 for some proxy setups, so we can try to default to that or just be flexible.
-    # The user URL suggests port 8888.
-    port = int(os.environ.get('PORT', 8888))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    import argparse
+    parser = argparse.ArgumentParser(description='ID By Rivoli Audio Processor')
+    parser.add_argument('-p', '--port', type=int, default=int(os.environ.get('PORT', 8888)),
+                        help='Port to run the server on (default: 8888)')
+    args = parser.parse_args()
+    
+    print(f"🚀 Starting ID By Rivoli on port {args.port}")
+    app.run(host='0.0.0.0', port=args.port, debug=True)
