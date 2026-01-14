@@ -918,15 +918,22 @@ def download_processed(subdir, filename):
     """
     Downloads a file from a specific subdirectory in processed folder.
     """
-    # Decoding is handled by Flask, but just to be sure we are safe
-    # We construct the absolute path
+    # Decoding is handled by Flask, but let's be safe with unquote
+    subdir = urllib.parse.unquote(subdir)
+    filename = urllib.parse.unquote(filename)
+    
     directory = os.path.join(PROCESSED_FOLDER, subdir)
+    filepath = os.path.join(directory, filename)
     
-    print(f"Download request: {subdir} / {filename}")
-    print(f"Looking in: {directory}")
+    # print(f"📥 Download Request:")
+    # print(f"   Subdir: {subdir}")
+    # print(f"   Filename: {filename}")
+    # print(f"   Full Path: {filepath}")
     
-    if not os.path.exists(os.path.join(directory, filename)):
-        print("File not found!")
+    if not os.path.exists(filepath):
+        print(f"❌ File NOT FOUND: {filepath}")
+        # Try finding file case-insensitive or slightly different?
+        # Sometimes extension case differs (.MP3 vs .mp3)
         abort(404)
         
     return send_from_directory(
