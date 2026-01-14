@@ -542,28 +542,28 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             'wav': wav_url
         }
     
-    # FORCE MAIN ONLY FOR EVERYTHING NOW
-    log_message(f"Mode 'Main Only' actif pour : {base_filename}")
+    # Export 3 versions: Main, Acapella, Instrumental
+    log_message(f"Génération des 3 versions pour : {base_filename}")
+    
+    # 1. Main (Original)
     original = AudioSegment.from_mp3(original_path)
     edits.append(export_edit(original, "Main"))
     
-    # SKIP DEMUCS EDITS LOGIC BELOW
-    """
-    # Check if genre is in the "simple" list
-    if any(simple_genre in genre for simple_genre in simple_genres):
-        print(f"Genre '{genre}' detected - Generating original only (no edits)")
-        # Just export the original with metadata
-        original = AudioSegment.from_mp3(original_path)
-        edits.append(export_edit(original, "Main"))
+    # 2. Acapella (Vocals only) - if available
+    if vocals_path and os.path.exists(vocals_path):
+        vocals = AudioSegment.from_mp3(vocals_path)
+        edits.append(export_edit(vocals, "Acapella"))
+        log_message(f"✓ Version Acapella créée")
     else:
-        print(f"Genre '{genre}' - Generating full edit suite")
-        # Generate full edits using the new processor
-        generated_edits = audio_processor.process_track(vocals_path, inst_path, original_path, bpm)
-        
-        # Iterate over generated edits and export them
-        for suffix, segment in generated_edits:
-            edits.append(export_edit(segment, suffix))
-    """
+        log_message(f"⚠️ Pas de fichier vocals pour Acapella")
+    
+    # 3. Instrumental (No vocals) - if available
+    if inst_path and os.path.exists(inst_path):
+        instrumental = AudioSegment.from_mp3(inst_path)
+        edits.append(export_edit(instrumental, "Instrumental"))
+        log_message(f"✓ Version Instrumentale créée")
+    else:
+        log_message(f"⚠️ Pas de fichier instrumental")
 
     return edits
 
@@ -846,33 +846,81 @@ def process_single_track(filepath, filename):
     try:
         job_status['state'] = 'processing'
         job_status['current_filename'] = filename
-        job_status['current_step'] = "Traitement Audio (Main Only)..."
+        job_status['current_step'] = "Séparation IA (Demucs)..."
         log_message(f"🚀 Début traitement : {filename}")
         
-        # SKIP DEMUCS - DIRECTLY PROCESS MAIN VERSION
-        # We don't need separation if we only output "Main"
+        track_name = os.path.splitext(filename)[0]
         
-        # 1. Generate "Main" Edit (Original + Metadata)
-        job_status['current_step'] = "Génération Version Main..."
+        # 1. Run Demucs separation
+        log_message(f"🎵 Séparation vocale/instrumentale en cours...")
+        
+        command = [
+            'python3', '-m', 'demucs',
+            '--two-stems=vocals',
+            '-n', 'htdemucs',
+            '--mp3',
+            '--mp3-bitrate', '320',
+            '-j', '4',
+            '-o', OUTPUT_FOLDER,
+            filepath
+        ]
+        
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        for line in process.stdout:
+            print(line, end='')
+            # Update progress from demucs output
+            if "%|" in line:
+                try:
+                    parts = line.split('%|')
+                    if len(parts) > 0:
+                        percent_part = parts[0].strip()
+                        p_match = re.search(r'(\d+)$', percent_part)
+                        if p_match:
+                            track_percent = int(p_match.group(1))
+                            job_status['progress'] = int(track_percent * 0.7)  # Demucs = 70%
+                except:
+                    pass
+        
+        process.wait()
+        
+        if process.returncode != 0:
+            log_message(f"❌ Erreur Demucs pour {filename}")
+            return
+        
+        # 2. Generate edits (Main, Acapella, Instrumental)
+        job_status['current_step'] = "Génération des versions..."
+        job_status['progress'] = 70
         
         clean_name, _ = clean_filename(filename)
         track_output_dir = os.path.join(PROCESSED_FOLDER, clean_name)
         os.makedirs(track_output_dir, exist_ok=True)
         
-        # Pass dummy paths for vocals/inst since we won't use them in Main Only mode
-        edits = create_edits(None, None, filepath, track_output_dir, filename)
+        # Get separated files
+        source_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)
+        inst_path = os.path.join(source_dir, 'no_vocals.mp3')
+        vocals_path = os.path.join(source_dir, 'vocals.mp3')
         
-        # Add to results
-        job_status['results'].append({
-            'original': clean_name,
-            'edits': edits
-        })
-        log_message(f"✅ Terminé : {clean_name}")
+        if os.path.exists(inst_path) and os.path.exists(vocals_path):
+            edits = create_edits(vocals_path, inst_path, filepath, track_output_dir, filename)
+            
+            # Add to results
+            job_status['results'].append({
+                'original': clean_name,
+                'edits': edits
+            })
+            log_message(f"✅ Terminé : {clean_name}")
+        else:
+            log_message(f"⚠️ Fichiers séparés non trouvés pour {filename}")
         
-        # OPTIONAL: AUTO-DELETE SOURCE FILE TO SAVE SPACE
-        # if os.path.exists(filepath):
-        #    os.remove(filepath)
-        #    log_message(f"🗑️ Fichier source supprimé : {filename}")
+        job_status['progress'] = 100
 
     except Exception as e:
         log_message(f"❌ Erreur critique {filename}: {e}")
