@@ -228,34 +228,34 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         except:
             pass
         
-        # 11. Picture - ID By Rivoli Cover as PRIMARY
+        # 11. Picture - Original cover as PRIMARY (type=3)
+        if original_tags:
+            for apic_key in original_tags.keys():
+                if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
+                    try:
+                        original_apic = original_tags[apic_key]
+                        tags.add(APIC(
+                            encoding=3,
+                            mime=original_apic.mime,
+                            type=3,  # Cover (front) - PRIMARY
+                            desc='Cover',
+                            data=original_apic.data
+                        ))
+                        break
+                    except:
+                        pass
+        
+        # 12. Picture - ID By Rivoli Cover as SECONDARY (type=0)
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
         if os.path.exists(cover_path):
             with open(cover_path, 'rb') as img:
                 tags.add(APIC(
                     encoding=3,
                     mime='image/jpeg',
-                    type=3,  # Cover (front)
+                    type=0,  # Other - SECONDARY
                     desc='ID By Rivoli',
                     data=img.read()
                 ))
-        
-        # 12. Picture - Original cover as secondary if exists
-        if original_tags:
-            for apic_key in original_tags.keys():
-                if apic_key.startswith('APIC:') and 'ID By Rivoli' not in str(apic_key):
-                    try:
-                        original_apic = original_tags[apic_key]
-                        tags.add(APIC(
-                            encoding=original_apic.encoding,
-                            mime=original_apic.mime,
-                            type=0,  # Other
-                            desc='Original',
-                            data=original_apic.data
-                        ))
-                        break
-                    except:
-                        pass
         
         # Additional fields for ID By Rivoli branding (optional, can be removed if not desired)
         tags.add(TMED(encoding=3, text='ID By Rivoli'))
@@ -301,34 +301,34 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
             audio.tags.add(TBPM(encoding=3, text=str(bpm)))
         audio.tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # Add ID By Rivoli Cover
-        cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
-        if os.path.exists(cover_path):
-            with open(cover_path, 'rb') as img:
-                audio.tags.add(APIC(
-                    encoding=3,
-                    mime='image/jpeg',
-                    type=3,  # Cover (front)
-                    desc='ID By Rivoli',
-                    data=img.read()
-                ))
-        
-        # Add original cover as secondary if exists
+        # Add Original cover as PRIMARY (type=3)
         if original_tags:
             for apic_key in original_tags.keys():
                 if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
                     try:
                         original_apic = original_tags[apic_key]
                         audio.tags.add(APIC(
-                            encoding=original_apic.encoding,
+                            encoding=3,
                             mime=original_apic.mime,
-                            type=0,  # Other
-                            desc='Original',
+                            type=3,  # Cover (front) - PRIMARY
+                            desc='Cover',
                             data=original_apic.data
                         ))
                         break
                     except:
                         pass
+        
+        # Add ID By Rivoli Cover as SECONDARY (type=0)
+        cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
+        if os.path.exists(cover_path):
+            with open(cover_path, 'rb') as img:
+                audio.tags.add(APIC(
+                    encoding=3,
+                    mime='image/jpeg',
+                    type=0,  # Other - SECONDARY
+                    desc='ID By Rivoli',
+                    data=img.read()
+                ))
         
         # Save properly embedded in WAV structure
         audio.save()
