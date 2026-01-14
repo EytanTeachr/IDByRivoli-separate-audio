@@ -655,7 +655,7 @@ def run_demucs_thread(filepaths, original_filenames):
                 '--mp3',
                 '--mp3-bitrate', '320',
                 '-j', '8',                    # More parallel jobs
-                '--segment', '11',            # Optimized segment size
+                '--segment', '7',             # Max for htdemucs is 7.8
                 '--device', DEMUCS_DEVICE,    # GPU/CPU auto-detection
                 '-o', OUTPUT_FOLDER
             ] + chunk
@@ -933,7 +933,7 @@ def process_single_track(filepath, filename):
                 '--mp3',
                 '--mp3-bitrate', '320',
                 '-j', '8' if device == 'cuda' else '4',
-                '--segment', '11',
+                '--segment', '7',              # Max for htdemucs is 7.8
                 '--device', device,
                 '-o', OUTPUT_FOLDER,
                 filepath
