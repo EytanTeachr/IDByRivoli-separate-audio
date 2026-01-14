@@ -193,8 +193,9 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         if original_tags and 'TCON' in original_tags:
             tags.add(TCON(encoding=3, text=original_tags['TCON'].text))
         
-        # 7. BPM (calculated)
-        tags.add(TBPM(encoding=3, text=str(bpm)))
+        # 7. BPM (from original metadata only, don't auto-detect)
+        if bpm is not None:
+            tags.add(TBPM(encoding=3, text=str(bpm)))
         
         # 8. ISRC (from original) - IMPORTANT: Always include
         isrc_value = ''
@@ -292,7 +293,8 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         if original_tags and 'TPE1' in original_tags:
             audio.tags.add(TPE1(encoding=3, text=original_tags['TPE1'].text))
         
-        audio.tags.add(TBPM(encoding=3, text=str(bpm)))
+        if bpm is not None:
+            audio.tags.add(TBPM(encoding=3, text=str(bpm)))
         audio.tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
         # Add ID By Rivoli Cover
@@ -534,7 +536,7 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
             'Label': 'ID By Rivoli',
             'Sous-label': label if label != 'ID By Rivoli' else '',
             'Date de sortie': date_sortie,
-            'BPM': bpm,
+            'BPM': bpm if bpm is not None else 0,
             'Artiste original': artist,
             'Url': cover_url,
             'ISRC': isrc,
@@ -568,9 +570,20 @@ DEMUCS_DEVICE = get_demucs_device()
 def create_edits(vocals_path, inst_path, original_path, base_output_path, base_filename):
     print(f"Loading audio for edits: {base_filename}")
     
-    # Detect BPM
-    bpm = audio_processor.detect_bpm(original_path)
-    log_message(f"BPM détecté pour {base_filename}: {bpm}")
+    # Get BPM from original file metadata (don't auto-detect)
+    bpm = None
+    try:
+        original_audio = MP3(original_path, ID3=ID3)
+        if original_audio.tags and 'TBPM' in original_audio.tags:
+            bpm_text = str(original_audio.tags['TBPM'].text[0]).strip()
+            if bpm_text:
+                bpm = int(float(bpm_text))
+                log_message(f"BPM depuis métadonnées: {bpm}")
+    except Exception as e:
+        print(f"Could not read BPM from metadata: {e}")
+    
+    if bpm is None:
+        log_message(f"⚠️ Pas de BPM dans les métadonnées originales")
     
     # FORCE MAIN ONLY MODE FOR ALL GENRES (TEMPORARY OVERRIDE)
     # Check genre to determine if we should generate full edits or just preserve original
