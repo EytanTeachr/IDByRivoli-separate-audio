@@ -398,8 +398,33 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         relative_url = edit_info.get('url', '')
         absolute_url = f"{base_url}{relative_url}" if relative_url else ''
         
-        # Cover URL (absolute)
-        cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"
+        # Extract original cover (Cover 2) and save it, then use that URL
+        cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"  # Fallback
+        
+        # Try to extract original cover from source file
+        if original_tags:
+            for apic_key in original_tags.keys():
+                if apic_key.startswith('APIC:'):
+                    try:
+                        original_apic = original_tags[apic_key]
+                        # Generate unique filename based on track
+                        track_name_clean = re.sub(r'[^\w\s-]', '', os.path.splitext(os.path.basename(original_path))[0])
+                        track_name_clean = track_name_clean.replace(' ', '_')[:50]
+                        
+                        # Determine extension from mime type
+                        ext = 'jpg' if 'jpeg' in original_apic.mime else 'png'
+                        cover_filename = f"cover_{track_name_clean}.{ext}"
+                        cover_save_path = os.path.join(BASE_DIR, 'static', 'covers', cover_filename)
+                        
+                        # Save the original cover
+                        with open(cover_save_path, 'wb') as f:
+                            f.write(original_apic.data)
+                        
+                        # Use the original cover URL
+                        cover_url = f"{base_url}/static/covers/{cover_filename}"
+                        break
+                    except Exception as e:
+                        print(f"Could not extract original cover: {e}")
         
         # Generate Track ID (clean format: no dashes, single underscores only)
         filename_raw = edit_info.get('name', '')
