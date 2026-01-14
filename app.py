@@ -415,6 +415,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     bpm = audio_processor.detect_bpm(original_path)
     log_message(f"BPM détecté pour {base_filename}: {bpm}")
     
+    # FORCE MAIN ONLY MODE FOR ALL GENRES (TEMPORARY OVERRIDE)
     # Check genre to determine if we should generate full edits or just preserve original
     try:
         original_audio = MP3(original_path, ID3=ID3)
@@ -424,7 +425,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         genre = ''
     
     # Genres that should NOT get edits (just original MP3/WAV)
-    simple_genres = ['house', 'electro house', 'dance']
+    # simple_genres = ['house', 'electro house', 'dance']
     
     edits = []
 
@@ -475,6 +476,13 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             'wav': wav_url
         }
     
+    # FORCE MAIN ONLY FOR EVERYTHING NOW
+    log_message(f"Mode 'Main Only' actif pour : {base_filename}")
+    original = AudioSegment.from_mp3(original_path)
+    edits.append(export_edit(original, "Main"))
+    
+    # SKIP DEMUCS EDITS LOGIC BELOW
+    """
     # Check if genre is in the "simple" list
     if any(simple_genre in genre for simple_genre in simple_genres):
         print(f"Genre '{genre}' detected - Generating original only (no edits)")
@@ -489,6 +497,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         # Iterate over generated edits and export them
         for suffix, segment in generated_edits:
             edits.append(export_edit(segment, suffix))
+    """
 
     return edits
 
@@ -751,58 +760,33 @@ def process_single_track(filepath, filename):
     try:
         job_status['state'] = 'processing'
         job_status['current_filename'] = filename
-        job_status['current_step'] = "Séparation IA..."
+        job_status['current_step'] = "Traitement Audio (Main Only)..."
         log_message(f"🚀 Début traitement : {filename}")
         
-        # 1. Run Demucs
-        command = [
-            'python3', '-m', 'demucs',
-            '--two-stems=vocals',
-            '-n', 'htdemucs',
-            '--mp3',
-            '--mp3-bitrate', '320',
-            '-j', '4', 
-            '-o', OUTPUT_FOLDER,
-            filepath
-        ]
+        # SKIP DEMUCS - DIRECTLY PROCESS MAIN VERSION
+        # We don't need separation if we only output "Main"
         
-        process = subprocess.Popen(
-            command, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.STDOUT, 
-            text=True,
-            universal_newlines=True
-        )
+        # 1. Generate "Main" Edit (Original + Metadata)
+        job_status['current_step'] = "Génération Version Main..."
         
-        # Wait for Demucs
-        process.wait()
+        clean_name, _ = clean_filename(filename)
+        track_output_dir = os.path.join(PROCESSED_FOLDER, clean_name)
+        os.makedirs(track_output_dir, exist_ok=True)
         
-        if process.returncode != 0:
-            log_message(f"❌ Erreur Demucs pour {filename}")
-            return
-
-        # 2. Generate Edits
-        job_status['current_step'] = "Génération Edits DJ..."
-        track_name = os.path.splitext(filename)[0]
-        source_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)
-        inst_path = os.path.join(source_dir, 'no_vocals.mp3')
-        vocals_path = os.path.join(source_dir, 'vocals.mp3')
+        # Pass dummy paths for vocals/inst since we won't use them in Main Only mode
+        edits = create_edits(None, None, filepath, track_output_dir, filename)
         
-        if os.path.exists(inst_path) and os.path.exists(vocals_path):
-            clean_name, _ = clean_filename(filename)
-            track_output_dir = os.path.join(PROCESSED_FOLDER, clean_name)
-            os.makedirs(track_output_dir, exist_ok=True)
-            
-            edits = create_edits(vocals_path, inst_path, filepath, track_output_dir, filename)
-            
-            # Add to results
-            job_status['results'].append({
-                'original': clean_name,
-                'edits': edits
-            })
-            log_message(f"✅ Terminé : {clean_name}")
-        else:
-            log_message(f"⚠️ Fichiers audio manquants pour {filename}")
+        # Add to results
+        job_status['results'].append({
+            'original': clean_name,
+            'edits': edits
+        })
+        log_message(f"✅ Terminé : {clean_name}")
+        
+        # OPTIONAL: AUTO-DELETE SOURCE FILE TO SAVE SPACE
+        # if os.path.exists(filepath):
+        #    os.remove(filepath)
+        #    log_message(f"🗑️ Fichier source supprimé : {filename}")
 
     except Exception as e:
         log_message(f"❌ Erreur critique {filename}: {e}")
