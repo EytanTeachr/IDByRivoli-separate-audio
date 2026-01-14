@@ -1225,12 +1225,37 @@ def download_file():
     if '..' in relative_path:
         print("   ❌ Directory traversal attempt")
         abort(403)
+    
+    # URL decode the path (in case it's double-encoded)
+    decoded_path = urllib.parse.unquote(relative_path)
+    print(f"   Decoded path: {decoded_path}")
         
-    # Construct full path - path should already be decoded by Flask
-    filepath = os.path.join(PROCESSED_FOLDER, relative_path)
+    # Construct full path
+    filepath = os.path.join(PROCESSED_FOLDER, decoded_path)
     
     print(f"   Looking for: {filepath}")
     print(f"   File exists: {os.path.exists(filepath)}")
+    
+    # If not found, try to find a matching file (handle encoding issues)
+    if not os.path.exists(filepath):
+        # Try to find file with similar name
+        parts = decoded_path.split('/')
+        if len(parts) >= 2:
+            subdir_name = parts[0]
+            file_name = parts[1]
+            
+            # Look for matching subdirectory
+            for existing_dir in os.listdir(PROCESSED_FOLDER):
+                if existing_dir.lower() == subdir_name.lower() or existing_dir == subdir_name:
+                    subdir_path = os.path.join(PROCESSED_FOLDER, existing_dir)
+                    if os.path.isdir(subdir_path):
+                        # Look for matching file
+                        for existing_file in os.listdir(subdir_path):
+                            if existing_file.lower() == file_name.lower() or existing_file == file_name:
+                                filepath = os.path.join(subdir_path, existing_file)
+                                print(f"   🔄 Found matching file: {filepath}")
+                                break
+                    break
     
     if not os.path.exists(filepath):
         # Debug: list what's actually in the processed folder
@@ -1248,11 +1273,21 @@ def download_file():
     
     # Use send_file with absolute path (most reliable)
     print(f"   ✅ Sending file: {filepath}")
-    return send_file(
+    
+    # Get clean filename for download
+    download_filename = os.path.basename(filepath)
+    
+    response = send_file(
         filepath,
         as_attachment=True,
-        download_name=os.path.basename(filepath)
+        download_name=download_filename
     )
+    
+    # Add CORS headers for cross-origin downloads
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+    
+    return response
 
 # Serve static files from processed folder directly
 @app.route('/processed/<path:filepath>')
