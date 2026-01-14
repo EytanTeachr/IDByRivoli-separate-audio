@@ -110,6 +110,40 @@ def clean_filename(filename):
     name = re.sub(r'\s+', ' ', name).strip()
     return name, ext
 
+def format_artists(artist_string):
+    """
+    Formats multiple artists with proper separators.
+    - 2 artists: "Artist A & Artist B"
+    - 3+ artists: "Artist A, Artist B & Artist C"
+    
+    Handles various input separators: /, ;, feat., ft., and, &
+    """
+    if not artist_string:
+        return artist_string
+    
+    # Normalize separators - replace common separators with a standard one
+    normalized = artist_string
+    # Replace "feat.", "ft.", "Feat.", "Ft." with separator
+    normalized = re.sub(r'\s*(?:feat\.?|ft\.?|Feat\.?|Ft\.?)\s*', '|||', normalized, flags=re.IGNORECASE)
+    # Replace " / ", "/", " & ", " and ", ";" with separator
+    normalized = re.sub(r'\s*/\s*', '|||', normalized)
+    normalized = re.sub(r'\s*;\s*', '|||', normalized)
+    normalized = re.sub(r'\s+&\s+', '|||', normalized)
+    normalized = re.sub(r'\s+and\s+', '|||', normalized, flags=re.IGNORECASE)
+    
+    # Split by our separator
+    artists = [a.strip() for a in normalized.split('|||') if a.strip()]
+    
+    if len(artists) == 0:
+        return artist_string
+    elif len(artists) == 1:
+        return artists[0]
+    elif len(artists) == 2:
+        return f"{artists[0]} & {artists[1]}"
+    else:
+        # 3 or more: "A, B, C & D"
+        return ', '.join(artists[:-1]) + ' & ' + artists[-1]
+
 def update_metadata(filepath, artist, title, original_path, bpm):
     """
     Updates metadata with ONLY the specified fields (clean slate).
@@ -400,7 +434,8 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         original_tags = original_audio.tags if original_audio.tags else {}
         
         # Extract fields
-        artist = str(original_tags.get('TPE1', 'Unknown')).strip() if 'TPE1' in original_tags else 'Unknown'
+        artist_raw = str(original_tags.get('TPE1', 'Unknown')).strip() if 'TPE1' in original_tags else 'Unknown'
+        artist = format_artists(artist_raw)  # Format multiple artists with , and &
         album = str(original_tags.get('TALB', '')).strip() if 'TALB' in original_tags else ''
         genre = str(original_tags.get('TCON', '')).strip() if 'TCON' in original_tags else ''
         
