@@ -303,14 +303,28 @@ CURRENT_HOST_URL = os.environ.get('PUBLIC_URL', '')
 
 @app.before_request
 def set_public_url():
-    """Captures the current public URL from the request headers to support dynamic Pod URLs."""
+    """Captures the current public URL from the request headers to support dynamic Pod URLs (RunPod, etc.)."""
     global CURRENT_HOST_URL
-    if not CURRENT_HOST_URL and request.host:
-        # Construct URL scheme (http/https) and host
-        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
-        CURRENT_HOST_URL = f"{scheme}://{request.host}"
-        # Log once
-        # print(f"📍 Detected Public URL: {CURRENT_HOST_URL}")
+    
+    # Always try to get the best URL from headers on each request
+    # Priority: X-Forwarded-Host > Host header > existing value
+    forwarded_host = request.headers.get('X-Forwarded-Host')
+    original_host = request.headers.get('Host')
+    scheme = request.headers.get('X-Forwarded-Proto', 'https')  # Default to https for pods
+    
+    # RunPod and similar platforms set X-Forwarded-Host to the public URL
+    if forwarded_host:
+        new_url = f"{scheme}://{forwarded_host}"
+    elif original_host and not original_host.startswith(('10.', '172.', '192.168.', '100.')):
+        # Use Host header only if it's not a private IP
+        new_url = f"{scheme}://{original_host}"
+    else:
+        new_url = None
+    
+    # Update if we found a valid public URL
+    if new_url and new_url != CURRENT_HOST_URL:
+        CURRENT_HOST_URL = new_url
+        print(f"📍 Public URL détectée: {CURRENT_HOST_URL}")
 
 def send_track_info_to_api(track_data):
     """
@@ -326,13 +340,14 @@ def send_track_info_to_api(track_data):
             'Authorization': f'Bearer {API_KEY}'
         }
         
-        # print(f"📤 Sending to API: {track_data['Titre']}")
+        # Log the URL being sent
+        print(f"📤 API: {track_data['Titre']} ({track_data['Format']}) → {track_data.get('Fichiers', 'N/A')}")
         
         response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=30)
         
-        if response.status_code == 200:
+        if response.status_code in [200, 202]:
             print(f"✅ API SUCCESS: {track_data['Titre']} ({track_data['Format']})")
-            log_message(f"API OK: {track_data['Titre']} ({track_data['Format']})")
+            log_message(f"API OK: {track_data['Titre']} ({track_data['Format']}) → {track_data.get('Fichiers', '')}")
         else:
             print(f"❌ API ERROR {response.status_code}: {response.text[:200]}")
             log_message(f"API ERROR {response.status_code} pour {track_data['Titre']}")
@@ -486,13 +501,18 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         print(f"   Expected WAV path: {expected_wav_path}")
         print(f"   WAV EXISTS: {os.path.exists(expected_wav_path)}")
         print(f"   ")
-        print(f"   Generated MP3 URL: {mp3_url}")
-        print(f"   Generated WAV URL: {wav_url}")
+        # Get the full URL with base
+        base_url = CURRENT_HOST_URL if CURRENT_HOST_URL else "http://localhost:8888"
+        full_mp3_url = f"{base_url}{mp3_url}"
+        full_wav_url = f"{base_url}{wav_url}"
+        
+        print(f"   Generated MP3 URL: {full_mp3_url}")
+        print(f"   Generated WAV URL: {full_wav_url}")
         print(f"{'='*60}\n")
         
-        # Log to UI as well
-        log_message(f"📥 URL MP3: {mp3_url}")
-        log_message(f"📥 URL WAV: {wav_url}")
+        # Log to UI as well - FULL URLs
+        log_message(f"📥 URL MP3: {full_mp3_url}")
+        log_message(f"📥 URL WAV: {full_wav_url}")
         
         # Prepare and send track info to API (for MP3)
         track_info_mp3 = {
@@ -746,6 +766,7 @@ track_queue = queue.Queue()
 
 # Worker thread function
 def worker():
+    global job_status
     while True:
         try:
             filename = track_queue.get()
@@ -756,6 +777,11 @@ def worker():
             if filename in load_history():
                 log_message(f"⏩ Déjà traité (ignoré) : {filename}")
                 track_queue.task_done()
+                # Reset state if queue is empty
+                if track_queue.empty():
+                    job_status['state'] = 'idle'
+                    job_status['current_step'] = ''
+                    job_status['current_filename'] = ''
                 continue
             
             filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -764,6 +790,11 @@ def worker():
             if not os.path.exists(filepath):
                  log_message(f"⚠️ Fichier introuvable (ignoré) : {filename}")
                  track_queue.task_done()
+                 # Reset state if queue is empty
+                 if track_queue.empty():
+                     job_status['state'] = 'idle'
+                     job_status['current_step'] = ''
+                     job_status['current_filename'] = ''
                  continue
 
             process_single_track(filepath, filename)
@@ -772,9 +803,18 @@ def worker():
             save_to_history(filename)
             
             track_queue.task_done()
+            
+            # Reset state to idle if queue is empty (ready for new files)
+            if track_queue.empty():
+                job_status['state'] = 'idle'
+                job_status['current_step'] = 'Prêt pour de nouveaux fichiers'
+                job_status['current_filename'] = ''
+                log_message("✅ File d'attente terminée - Prêt pour de nouveaux fichiers")
+                
         except Exception as e:
             print(f"Worker Error: {e}")
             log_message(f"Erreur Worker: {e}")
+            job_status['state'] = 'idle'  # Reset on error too
 
 # Start worker thread
 worker_thread = threading.Thread(target=worker, daemon=True)
@@ -1041,6 +1081,23 @@ def list_files():
         if os.path.isdir(subdir_path):
             result[subdir] = os.listdir(subdir_path)
     return jsonify(result)
+
+# Debug route to check detected public URL
+@app.route('/debug_url')
+def debug_url():
+    """Debug route to see the detected public URL and request headers."""
+    return jsonify({
+        'CURRENT_HOST_URL': CURRENT_HOST_URL,
+        'PUBLIC_URL_ENV': os.environ.get('PUBLIC_URL', ''),
+        'headers': {
+            'Host': request.headers.get('Host'),
+            'X-Forwarded-Host': request.headers.get('X-Forwarded-Host'),
+            'X-Forwarded-Proto': request.headers.get('X-Forwarded-Proto'),
+            'X-Real-IP': request.headers.get('X-Real-IP'),
+        },
+        'request_host': request.host,
+        'request_url': request.url,
+    })
 
 # Test route to check URL generation
 @app.route('/test_download')
