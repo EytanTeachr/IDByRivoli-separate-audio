@@ -347,11 +347,37 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     """
     global CURRENT_HOST_URL
     
-    # Fallback if request hasn't set it yet (shouldn't happen in normal flow)
+    # Fallback if request hasn't set it yet
     base_url = CURRENT_HOST_URL if CURRENT_HOST_URL else "http://localhost:8888"
     
     try:
-        # ... existing logic ...
+        # Read original metadata
+        original_audio = MP3(original_path, ID3=ID3)
+        original_tags = original_audio.tags if original_audio.tags else {}
+        
+        # Extract fields
+        artist = str(original_tags.get('TPE1', 'Unknown')).strip() if 'TPE1' in original_tags else 'Unknown'
+        album = str(original_tags.get('TALB', '')).strip() if 'TALB' in original_tags else ''
+        genre = str(original_tags.get('TCON', '')).strip() if 'TCON' in original_tags else ''
+        
+        # ISRC extraction
+        isrc = ''
+        if 'TSRC' in original_tags:
+            isrc = str(original_tags['TSRC'].text[0]).strip() if original_tags['TSRC'].text else ''
+        
+        # Date handling
+        date_str = str(original_tags.get('TDRC', '')).strip() if 'TDRC' in original_tags else ''
+        try:
+            if date_str:
+                date_obj = datetime.strptime(date_str[:10], '%Y-%m-%d')
+                date_sortie = int(date_obj.timestamp())
+            else:
+                date_sortie = 0
+        except:
+            date_sortie = 0
+        
+        # Publisher/Label
+        label = str(original_tags.get('TPUB', 'ID By Rivoli')).strip() if 'TPUB' in original_tags else 'ID By Rivoli'
         
         # Construct ABSOLUTE URLs using DYNAMIC BASE URL
         relative_url = edit_info.get('url', '')
@@ -359,8 +385,6 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         
         # Cover URL (absolute)
         cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"
-        
-        # ... existing logic ...
         
         # Generate Track ID (clean format: no dashes, single underscores only)
         filename_raw = edit_info.get('name', '')
@@ -373,23 +397,23 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         
         # Prepare data structure
         track_data = {
-            'Type': edit_info.get('type', ''),  # e.g., "Clap In", "Extended", etc.
-            'Format': edit_info.get('format', 'MP3'),  # "MP3" or "WAV"
+            'Type': edit_info.get('type', ''),
+            'Format': edit_info.get('format', 'MP3'),
             'Titre': edit_info.get('name', ''),
             'Artiste': artist,
-            'Fichiers': absolute_url,  # ABSOLUTE Download URL
-            'Univers': '',  # To be filled if metadata available
-            'Mood': '',  # To be filled if metadata available
+            'Fichiers': absolute_url,
+            'Univers': '',
+            'Mood': '',
             'Style': genre,
             'Album': album,
-            'Label': 'ID By Rivoli',  # Always ID By Rivoli for processed tracks
-            'Sous-label': label if label != 'ID By Rivoli' else '',  # Original label as sub-label
+            'Label': 'ID By Rivoli',
+            'Sous-label': label if label != 'ID By Rivoli' else '',
             'Date de sortie': date_sortie,
             'BPM': bpm,
-            'Artiste original': artist,  # Same as Artiste for now
-            'Url': cover_url,  # ABSOLUTE Cover URL
-            'ISRC': isrc,  # ISRC from original
-            'TRACK_ID': track_id  # Custom Track ID
+            'Artiste original': artist,
+            'Url': cover_url,
+            'ISRC': isrc,
+            'TRACK_ID': track_id
         }
         
         return track_data
@@ -442,8 +466,13 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         rel_path_mp3 = f"{subdir}/{out_name_mp3}"
         rel_path_wav = f"{subdir}/{out_name_wav}"
         
-        mp3_url = f"/download_file?path={urllib.parse.quote(rel_path_mp3)}"
-        wav_url = f"/download_file?path={urllib.parse.quote(rel_path_wav)}"
+        # IMPORTANT: safe='/' to NOT encode the slash!
+        mp3_url = f"/download_file?path={urllib.parse.quote(rel_path_mp3, safe='/')}"
+        wav_url = f"/download_file?path={urllib.parse.quote(rel_path_wav, safe='/')}"
+        
+        print(f"   Generated URLs:")
+        print(f"   MP3: {mp3_url}")
+        print(f"   WAV: {wav_url}")
         
         # Prepare and send track info to API (for MP3)
         track_info_mp3 = {
@@ -904,9 +933,9 @@ def status():
                     grouped[name_no_ext] = {'name': name_no_ext, 'mp3': '#', 'wav': '#'}
                 
                 subdir = d
-                # New robust URL format
+                # New robust URL format - safe='/' to keep slashes!
                 rel_path = f"{subdir}/{f}"
-                url = f"/download_file?path={urllib.parse.quote(rel_path)}"
+                url = f"/download_file?path={urllib.parse.quote(rel_path, safe='/')}"
                 
                 if f.endswith('.mp3'):
                     grouped[name_no_ext]['mp3'] = url
@@ -923,39 +952,75 @@ def status():
 @app.route('/download_file')
 def download_file():
     """
-    Robust download route using query parameter to avoid URL path issues.
+    Robust download route using query parameter.
     Usage: /download_file?path=SubDir/File.mp3
     """
     relative_path = request.args.get('path')
+    
+    print(f"📥 DOWNLOAD REQUEST")
+    print(f"   Raw path param: {relative_path}")
+    
     if not relative_path:
+        print("   ❌ No path provided")
         abort(400)
     
     # Security: prevent directory traversal
-    if '..' in relative_path or relative_path.startswith('/'):
+    if '..' in relative_path:
+        print("   ❌ Directory traversal attempt")
         abort(403)
         
-    # Construct full path
+    # Construct full path - path should already be decoded by Flask
     filepath = os.path.join(PROCESSED_FOLDER, relative_path)
-    directory = os.path.dirname(filepath)
-    filename = os.path.basename(filepath)
+    
+    print(f"   Looking for: {filepath}")
+    print(f"   File exists: {os.path.exists(filepath)}")
     
     if not os.path.exists(filepath):
-        print(f"❌ File NOT FOUND: {filepath}")
+        # Debug: list what's actually in the processed folder
+        print(f"   ❌ FILE NOT FOUND!")
+        print(f"   Contents of PROCESSED_FOLDER:")
+        for item in os.listdir(PROCESSED_FOLDER):
+            item_path = os.path.join(PROCESSED_FOLDER, item)
+            if os.path.isdir(item_path):
+                print(f"      📁 {item}/")
+                for subitem in os.listdir(item_path)[:5]:
+                    print(f"         - {subitem}")
+            else:
+                print(f"      📄 {item}")
         abort(404)
-        
-    return send_from_directory(
-        directory, 
-        filename, 
-        as_attachment=True
+    
+    # Use send_file with absolute path (most reliable)
+    print(f"   ✅ Sending file: {filepath}")
+    return send_file(
+        filepath,
+        as_attachment=True,
+        download_name=os.path.basename(filepath)
     )
 
-@app.route('/download_processed/<path:subdir>/<path:filename>')
-def download_processed_legacy(subdir, filename):
-    # Redirect legacy calls to new system if possible or just keep as fallback
-    # But for new links, we use the query param method.
-    return download_file() # Won't work directly, but let's just keep the old route for now or replace logic.
-    pass 
+# Serve static files from processed folder directly
+@app.route('/processed/<path:filepath>')
+def serve_processed_file(filepath):
+    """Alternative route: serve files directly from processed folder."""
+    full_path = os.path.join(PROCESSED_FOLDER, filepath)
+    print(f"📥 SERVE PROCESSED: {filepath}")
+    print(f"   Full path: {full_path}")
+    print(f"   Exists: {os.path.exists(full_path)}")
+    
+    if not os.path.exists(full_path):
+        abort(404)
+    
+    return send_file(full_path, as_attachment=True)
 
+# Debug route to list all processed files
+@app.route('/list_files')
+def list_files():
+    """Debug route to see what files are available."""
+    result = {}
+    for subdir in os.listdir(PROCESSED_FOLDER):
+        subdir_path = os.path.join(PROCESSED_FOLDER, subdir)
+        if os.path.isdir(subdir_path):
+            result[subdir] = os.listdir(subdir_path)
+    return jsonify(result)
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup_files():
