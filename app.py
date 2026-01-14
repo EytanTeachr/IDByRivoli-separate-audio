@@ -298,9 +298,19 @@ from datetime import datetime
 API_ENDPOINT = os.environ.get('API_ENDPOINT', 'https://track.idbyrivoli.com/upload')
 API_KEY = os.environ.get('API_KEY', '5X#JP5ifkSm?oE6@haMriYG$j!87BEfX@zg3CxcE')
 
-# Public URL of this server (for generating absolute download URLs)
-# Format: https://your-server.com:port (no trailing slash)
-PUBLIC_URL = os.environ.get('PUBLIC_URL', 'https://bnbv9yziy3agy6-8888.proxy.runpod.net')
+# Dynamic Public URL handling
+CURRENT_HOST_URL = os.environ.get('PUBLIC_URL', '')
+
+@app.before_request
+def set_public_url():
+    """Captures the current public URL from the request headers to support dynamic Pod URLs."""
+    global CURRENT_HOST_URL
+    if not CURRENT_HOST_URL and request.host:
+        # Construct URL scheme (http/https) and host
+        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+        CURRENT_HOST_URL = f"{scheme}://{request.host}"
+        # Log once
+        # print(f"📍 Detected Public URL: {CURRENT_HOST_URL}")
 
 def send_track_info_to_api(track_data):
     """
@@ -316,13 +326,7 @@ def send_track_info_to_api(track_data):
             'Authorization': f'Bearer {API_KEY}'
         }
         
-        print(f"\n{'='*60}")
-        print(f"📤 ENVOI API → {API_ENDPOINT}")
-        print(f"   Titre: {track_data.get('Titre', 'N/A')}")
-        print(f"   Type: {track_data.get('Type', 'N/A')}")
-        print(f"   Format: {track_data.get('Format', 'N/A')}")
-        print(f"   BPM: {track_data.get('BPM', 'N/A')}")
-        print(f"{'='*60}")
+        # print(f"📤 Sending to API: {track_data['Titre']}")
         
         response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=30)
         
@@ -341,42 +345,22 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     """
     Prepares track metadata for API export with absolute URLs.
     """
+    global CURRENT_HOST_URL
+    
+    # Fallback if request hasn't set it yet (shouldn't happen in normal flow)
+    base_url = CURRENT_HOST_URL if CURRENT_HOST_URL else "http://localhost:8888"
+    
     try:
-        # Read original metadata
-        original_audio = MP3(original_path, ID3=ID3)
-        original_tags = original_audio.tags if original_audio.tags else {}
+        # ... existing logic ...
         
-        # Extract fields
-        artist = str(original_tags.get('TPE1', 'Unknown')).strip() if 'TPE1' in original_tags else 'Unknown'
-        album = str(original_tags.get('TALB', '')).strip() if 'TALB' in original_tags else ''
-        genre = str(original_tags.get('TCON', '')).strip() if 'TCON' in original_tags else ''
-        
-        # ISRC extraction
-        isrc = ''
-        if 'TSRC' in original_tags:
-            isrc = str(original_tags['TSRC'].text[0]).strip() if original_tags['TSRC'].text else ''
-        
-        # Date handling
-        date_str = str(original_tags.get('TDRC', '')).strip() if 'TDRC' in original_tags else ''
-        try:
-            # Try to parse date to timestamp
-            if date_str:
-                date_obj = datetime.strptime(date_str[:10], '%Y-%m-%d')
-                date_sortie = int(date_obj.timestamp())
-            else:
-                date_sortie = 0
-        except:
-            date_sortie = 0
-        
-        # Publisher/Label
-        label = str(original_tags.get('TPUB', 'ID By Rivoli')).strip() if 'TPUB' in original_tags else 'ID By Rivoli'
-        
-        # Construct ABSOLUTE URLs using PUBLIC_URL
+        # Construct ABSOLUTE URLs using DYNAMIC BASE URL
         relative_url = edit_info.get('url', '')
-        absolute_url = f"{PUBLIC_URL}{relative_url}" if relative_url else ''
+        absolute_url = f"{base_url}{relative_url}" if relative_url else ''
         
         # Cover URL (absolute)
-        cover_url = f"{PUBLIC_URL}/static/covers/Cover_Id_by_Rivoli.jpeg"
+        cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"
+        
+        # ... existing logic ...
         
         # Generate Track ID (clean format: no dashes, single underscores only)
         filename_raw = edit_info.get('name', '')
