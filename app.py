@@ -312,17 +312,38 @@ def set_public_url():
     original_host = request.headers.get('Host')
     scheme = request.headers.get('X-Forwarded-Proto', 'https')  # Default to https for pods
     
-    # RunPod and similar platforms set X-Forwarded-Host to the public URL
-    if forwarded_host:
-        new_url = f"{scheme}://{forwarded_host}"
-    elif original_host and not original_host.startswith(('10.', '172.', '192.168.', '100.')):
-        # Use Host header only if it's not a private IP
-        new_url = f"{scheme}://{original_host}"
-    else:
-        new_url = None
+    # Debug: log all relevant headers on first request
+    if not CURRENT_HOST_URL or 'localhost' in CURRENT_HOST_URL:
+        print(f"🔍 Headers debug:")
+        print(f"   X-Forwarded-Host: {forwarded_host}")
+        print(f"   X-Forwarded-Proto: {scheme}")
+        print(f"   Host: {original_host}")
+        print(f"   X-Real-IP: {request.headers.get('X-Real-IP')}")
+        print(f"   Origin: {request.headers.get('Origin')}")
+        print(f"   Referer: {request.headers.get('Referer')}")
     
-    # Update if we found a valid public URL
-    if new_url and new_url != CURRENT_HOST_URL:
+    new_url = None
+    
+    # RunPod and similar platforms set X-Forwarded-Host to the public URL
+    if forwarded_host and 'localhost' not in forwarded_host:
+        new_url = f"{scheme}://{forwarded_host}"
+    # Try Origin header (set by browser on CORS requests)
+    elif request.headers.get('Origin') and 'localhost' not in request.headers.get('Origin', ''):
+        new_url = request.headers.get('Origin')
+    # Try Referer header
+    elif request.headers.get('Referer') and 'localhost' not in request.headers.get('Referer', ''):
+        # Extract base URL from referer
+        referer = request.headers.get('Referer')
+        from urllib.parse import urlparse
+        parsed = urlparse(referer)
+        if parsed.netloc and 'localhost' not in parsed.netloc:
+            new_url = f"{parsed.scheme}://{parsed.netloc}"
+    # Use Host header only if it's not a private IP or localhost
+    elif original_host and not original_host.startswith(('10.', '172.', '192.168.', '100.', 'localhost', '127.')):
+        new_url = f"{scheme}://{original_host}"
+    
+    # Update if we found a valid public URL (not localhost)
+    if new_url and 'localhost' not in new_url and new_url != CURRENT_HOST_URL:
         CURRENT_HOST_URL = new_url
         print(f"📍 Public URL détectée: {CURRENT_HOST_URL}")
 
@@ -365,7 +386,13 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     global CURRENT_HOST_URL
     
     # Fallback if request hasn't set it yet
-    base_url = CURRENT_HOST_URL if CURRENT_HOST_URL else "http://localhost:8888"
+    base_url = CURRENT_HOST_URL if CURRENT_HOST_URL else ""
+    
+    # Warn if we don't have a valid public URL
+    if not base_url or 'localhost' in base_url:
+        print(f"⚠️ WARNING: No valid public URL detected! API calls may fail.")
+        print(f"   Current CURRENT_HOST_URL: {CURRENT_HOST_URL}")
+        print(f"   Set PUBLIC_URL env variable or access the app via its public URL first.")
     
     try:
         # Read original metadata
