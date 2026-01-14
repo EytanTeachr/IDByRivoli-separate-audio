@@ -922,50 +922,65 @@ def process_single_track(filepath, filename):
         track_name = os.path.splitext(filename)[0]
         
         # 1. Run Demucs separation (OPTIMIZED FOR SPEED)
-        device_emoji = "🚀 GPU" if DEMUCS_DEVICE == 'cuda' else "💻 CPU"
-        log_message(f"🎵 Séparation vocale/instrumentale ({device_emoji})...")
+        def run_demucs_with_device(device):
+            device_emoji = "🚀 GPU" if device == 'cuda' else "💻 CPU"
+            log_message(f"🎵 Séparation vocale/instrumentale ({device_emoji})...")
+            
+            cmd = [
+                'python3', '-m', 'demucs',
+                '--two-stems=vocals',
+                '-n', 'htdemucs',
+                '--mp3',
+                '--mp3-bitrate', '320',
+                '-j', '8' if device == 'cuda' else '4',
+                '--segment', '11',
+                '--device', device,
+                '-o', OUTPUT_FOLDER,
+                filepath
+            ]
+            
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            output_lines = []
+            for line in proc.stdout:
+                print(line, end='')
+                output_lines.append(line)
+                if "%|" in line:
+                    try:
+                        parts = line.split('%|')
+                        if len(parts) > 0:
+                            percent_part = parts[0].strip()
+                            p_match = re.search(r'(\d+)$', percent_part)
+                            if p_match:
+                                track_percent = int(p_match.group(1))
+                                job_status['progress'] = int(track_percent * 0.7)
+                    except:
+                        pass
+            
+            proc.wait()
+            return proc.returncode, output_lines
         
-        command = [
-            'python3', '-m', 'demucs',
-            '--two-stems=vocals',
-            '-n', 'htdemucs',
-            '--mp3',
-            '--mp3-bitrate', '320',
-            '-j', '8',                    # More parallel jobs
-            '--segment', '11',            # Optimized segment size for speed
-            '--device', DEMUCS_DEVICE,    # GPU/CPU auto-detection
-            '-o', OUTPUT_FOLDER,
-            filepath
-        ]
+        # Try with detected device first
+        returncode, demucs_output = run_demucs_with_device(DEMUCS_DEVICE)
         
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
+        # If GPU failed, fallback to CPU
+        if returncode != 0 and DEMUCS_DEVICE == 'cuda':
+            log_message(f"⚠️ GPU échoué, fallback vers CPU...")
+            returncode, demucs_output = run_demucs_with_device('cpu')
         
-        for line in process.stdout:
-            print(line, end='')
-            # Update progress from demucs output
-            if "%|" in line:
-                try:
-                    parts = line.split('%|')
-                    if len(parts) > 0:
-                        percent_part = parts[0].strip()
-                        p_match = re.search(r'(\d+)$', percent_part)
-                        if p_match:
-                            track_percent = int(p_match.group(1))
-                            job_status['progress'] = int(track_percent * 0.7)  # Demucs = 70%
-                except:
-                    pass
-        
-        process.wait()
-        
-        if process.returncode != 0:
+        if returncode != 0:
+            error_lines = ''.join(demucs_output[-10:])
             log_message(f"❌ Erreur Demucs pour {filename}")
+            log_message(f"📋 Code retour: {returncode}")
+            log_message(f"📋 Détails: {error_lines[:500]}")
+            print(f"DEMUCS ERROR OUTPUT:\n{error_lines}")
             return
         
         # 2. Generate edits (Main, Acapella, Instrumental)
