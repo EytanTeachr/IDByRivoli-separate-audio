@@ -464,6 +464,22 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
 
 import audio_processor
 
+# Detect if GPU is available for Demucs acceleration
+def get_demucs_device():
+    """Detect best device for Demucs (CUDA GPU or CPU)."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            print(f"🚀 GPU détecté: {gpu_name} - Mode CUDA activé")
+            return 'cuda'
+    except:
+        pass
+    print("💻 Pas de GPU détecté - Mode CPU")
+    return 'cpu'
+
+DEMUCS_DEVICE = get_demucs_device()
+
 def create_edits(vocals_path, inst_path, original_path, base_output_path, base_filename):
     print(f"Loading audio for edits: {base_filename}")
     
@@ -486,6 +502,8 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     edits = []
 
     def export_edit(audio_segment, suffix):
+        from concurrent.futures import ThreadPoolExecutor
+        
         clean_name, _ = clean_filename(base_filename)
         out_name_mp3 = f"{clean_name} {suffix}.mp3"
         out_name_wav = f"{clean_name} {suffix}.wav"
@@ -493,14 +511,19 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         out_path_mp3 = os.path.join(base_output_path, out_name_mp3)
         out_path_wav = os.path.join(base_output_path, out_name_wav)
         
-        audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
-        audio_segment.export(out_path_wav, format="wav")
+        # Parallel export of MP3 and WAV for speed
+        def export_mp3():
+            audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
+            update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
         
-        # Update metadata for MP3 (full metadata + cover)
-        update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
+        def export_wav():
+            audio_segment.export(out_path_wav, format="wav")
+            update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
         
-        # Update metadata for WAV (cover art included)
-        update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} {suffix}", original_path, bpm)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            executor.submit(export_mp3)
+            executor.submit(export_wav)
+            executor.shutdown(wait=True)
         
         subdir = clean_name
         
@@ -614,7 +637,9 @@ def run_demucs_thread(filepaths, original_filenames):
                 '-n', 'htdemucs',
                 '--mp3',
                 '--mp3-bitrate', '320',
-                '-j', '4', 
+                '-j', '8',                    # More parallel jobs
+                '--segment', '11',            # Optimized segment size
+                '--device', DEMUCS_DEVICE,    # GPU/CPU auto-detection
                 '-o', OUTPUT_FOLDER
             ] + chunk
 
@@ -879,8 +904,9 @@ def process_single_track(filepath, filename):
         
         track_name = os.path.splitext(filename)[0]
         
-        # 1. Run Demucs separation
-        log_message(f"🎵 Séparation vocale/instrumentale en cours...")
+        # 1. Run Demucs separation (OPTIMIZED FOR SPEED)
+        device_emoji = "🚀 GPU" if DEMUCS_DEVICE == 'cuda' else "💻 CPU"
+        log_message(f"🎵 Séparation vocale/instrumentale ({device_emoji})...")
         
         command = [
             'python3', '-m', 'demucs',
@@ -888,7 +914,9 @@ def process_single_track(filepath, filename):
             '-n', 'htdemucs',
             '--mp3',
             '--mp3-bitrate', '320',
-            '-j', '4',
+            '-j', '8',                    # More parallel jobs
+            '--segment', '11',            # Optimized segment size for speed
+            '--device', DEMUCS_DEVICE,    # GPU/CPU auto-detection
             '-o', OUTPUT_FOLDER,
             filepath
         ]
