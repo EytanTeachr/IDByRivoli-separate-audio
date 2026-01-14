@@ -1316,12 +1316,34 @@ def cleanup_files():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def kill_jupyter():
+    """Kill any running Jupyter processes to free up resources."""
+    try:
+        import signal
+        result = subprocess.run(['pgrep', '-f', 'jupyter'], capture_output=True, text=True)
+        pids = result.stdout.strip().split('\n')
+        killed = 0
+        for pid in pids:
+            if pid:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                    killed += 1
+                except (ProcessLookupError, ValueError):
+                    pass
+        if killed > 0:
+            print(f"🔪 Killed {killed} Jupyter process(es)")
+    except Exception as e:
+        print(f"⚠️ Could not kill Jupyter: {e}")
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='ID By Rivoli Audio Processor')
     parser.add_argument('-p', '--port', type=int, default=int(os.environ.get('PORT', 8888)),
                         help='Port to run the server on (default: 8888)')
     args = parser.parse_args()
+    
+    # Kill Jupyter processes before starting
+    kill_jupyter()
     
     print(f"🚀 Starting ID By Rivoli on port {args.port}")
     app.run(host='0.0.0.0', port=args.port, debug=True)
