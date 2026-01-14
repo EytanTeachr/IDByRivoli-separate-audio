@@ -856,6 +856,50 @@ def download_processed(subdir, filename):
         mimetype='audio/mpeg' if filename.lower().endswith('.mp3') else 'audio/wav'
     )
 
+@app.route('/cleanup', methods=['POST'])
+def cleanup_files():
+    """
+    Deletes all files in uploads, output, and processed directories to free up disk space.
+    """
+    global job_status
+    
+    try:
+        # Clear directories
+        for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER, PROCESSED_FOLDER]:
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print(f'Failed to delete {file_path}. Reason: {e}')
+
+        # Reset Job Status
+        job_status = {
+            'state': 'idle', 
+            'progress': 0,
+            'total_files': 0,
+            'current_file_idx': 0,
+            'current_filename': '',
+            'current_step': '',
+            'results': [],
+            'error': None,
+            'logs': [],
+            'queue_size': 0
+        }
+        
+        # Clear Queue (drain it)
+        with track_queue.mutex:
+            track_queue.queue.clear()
+            
+        log_message("🧹 Espace disque nettoyé avec succès.")
+        return jsonify({'message': 'Cleanup successful'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='ID By Rivoli Audio Processor')
