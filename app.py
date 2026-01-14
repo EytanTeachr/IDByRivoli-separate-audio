@@ -35,9 +35,20 @@ job_status = {
     'total_files': 0,
     'current_file_idx': 0,
     'current_filename': '',
+    'current_step': '',
     'results': [],
-    'error': None
+    'error': None,
+    'logs': []  # Added logs list
 }
+
+def log_message(message):
+    """Adds a message to the job logs and prints it."""
+    print(message)
+    timestamp = time.strftime("%H:%M:%S")
+    job_status['logs'].append(f"[{timestamp}] {message}")
+    # Keep only last 1000 logs to prevent memory issues
+    if len(job_status['logs']) > 1000:
+        job_status['logs'] = job_status['logs'][-1000:]
 
 import shutil
 import zipfile
@@ -309,11 +320,14 @@ def send_track_info_to_api(track_data):
         
         if response.status_code == 200:
             print(f"✅ API SUCCESS: {track_data['Titre']} ({track_data['Format']})")
+            log_message(f"API OK: {track_data['Titre']} ({track_data['Format']})")
         else:
             print(f"❌ API ERROR {response.status_code}: {response.text[:200]}")
+            log_message(f"API ERROR {response.status_code} pour {track_data['Titre']}")
             
     except Exception as e:
         print(f"❌ API EXCEPTION: {e}")
+        log_message(f"API EXCEPTION: {e}")
 
 def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
     """
@@ -399,7 +413,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     
     # Detect BPM
     bpm = audio_processor.detect_bpm(original_path)
-    print(f"Detected BPM: {bpm}")
+    log_message(f"BPM détecté pour {base_filename}: {bpm}")
     
     # Check genre to determine if we should generate full edits or just preserve original
     try:
@@ -503,7 +517,7 @@ def run_demucs_thread(filepaths, original_filenames):
 
             chunk_num = i // 50 + 1
             total_chunks = (len(filepaths) - 1) // 50 + 1
-            print(f"Starting batch processing of chunk {chunk_num}/{total_chunks}...")
+            log_message(f"Démarrage de la séparation IA (Lot {chunk_num}/{total_chunks})...")
             
             # Reset progress for new chunk relative to file count? 
             # Ideally we track global file index.
@@ -528,7 +542,9 @@ def run_demucs_thread(filepaths, original_filenames):
                     try:
                         match = re.search(r"Separating track\s+(.+)$", line)
                         if match:
-                            job_status['current_filename'] = match.group(1).strip()
+                            filename_found = match.group(1).strip()
+                            job_status['current_filename'] = filename_found
+                            log_message(f"Séparation en cours : {filename_found}")
                     except:
                         pass
 
@@ -575,6 +591,7 @@ def run_demucs_thread(filepaths, original_filenames):
                 return
 
         print("Starting Edit Generation Phase...")
+        log_message("Fin de la séparation IA. Début de la génération des Edits DJ...")
         job_status['progress'] = 50
         job_status['current_step'] = "Génération des Edits"
         
@@ -587,6 +604,7 @@ def run_demucs_thread(filepaths, original_filenames):
             job_status['current_file_idx'] = i + 1
             job_status['current_filename'] = filename
             job_status['current_step'] = "Création des versions DJ (Edits)"
+            log_message(f"Création des edits pour : {filename}")
             
             track_name = os.path.splitext(filename)[0]
             
@@ -674,10 +692,13 @@ def upload_file():
         'total_files': len(files),
         'current_file_idx': 0,
         'current_filename': '',
-        'current_step': 'Initialisation...', # Added detail
+        'current_step': 'Initialisation...',
         'results': [],
-        'error': None
+        'error': None,
+        'logs': []
     }
+    
+    log_message(f"Traitement démarré pour {len(files)} fichier(s)")
     
     for file in files:
         if file.filename:

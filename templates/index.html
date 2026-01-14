@@ -153,6 +153,25 @@
             margin-top: 15px;
         }
 
+        .log-container {
+            margin-top: 30px;
+            background-color: #000;
+            border: 1px solid #333;
+            height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            color: #0f0;
+            display: none; /* Hidden by default */
+            text-align: left;
+        }
+        .log-entry {
+            margin-bottom: 2px;
+            border-bottom: 1px solid #111;
+            padding-bottom: 2px;
+        }
+
         .results {
             margin-top: 60px;
             display: none;
@@ -285,6 +304,8 @@
                 <div id="progressFill" class="progress-fill">0%</div>
             </div>
             <p id="statusText" class="status-text">Initialisation...</p>
+            
+            <div id="logContainer" class="log-container"></div>
         </div>
     </div>
 
@@ -448,6 +469,7 @@
 
             // --- IMPROVED UPLOAD LOGIC START ---
             document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('logContainer').style.display = 'block'; // Show logs
             document.getElementById('results').style.display = 'none';
             document.getElementById('submitBtn').disabled = true;
             
@@ -515,6 +537,13 @@
 
                     const progressFill = document.getElementById('progressFill');
                     const statusText = document.getElementById('statusText');
+                    const logContainer = document.getElementById('logContainer');
+
+                    // Update Logs
+                    if (status.logs && status.logs.length > 0) {
+                        logContainer.innerHTML = status.logs.map(log => `<div class="log-entry">${log}</div>`).join('');
+                        logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll to bottom
+                    }
 
                     if (status.state === 'processing') {
                         const percent = status.progress;
