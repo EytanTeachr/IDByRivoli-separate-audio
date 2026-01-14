@@ -470,9 +470,29 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         mp3_url = f"/download_file?path={urllib.parse.quote(rel_path_mp3, safe='/')}"
         wav_url = f"/download_file?path={urllib.parse.quote(rel_path_wav, safe='/')}"
         
-        print(f"   Generated URLs:")
-        print(f"   MP3: {mp3_url}")
-        print(f"   WAV: {wav_url}")
+        # VERIFICATION: Check if files actually exist where we expect them
+        expected_mp3_path = os.path.join(PROCESSED_FOLDER, rel_path_mp3)
+        expected_wav_path = os.path.join(PROCESSED_FOLDER, rel_path_wav)
+        
+        print(f"\n{'='*60}")
+        print(f"📁 FILE GENERATION CHECK:")
+        print(f"   Subdir (clean_name): '{subdir}'")
+        print(f"   MP3 filename: '{out_name_mp3}'")
+        print(f"   WAV filename: '{out_name_wav}'")
+        print(f"   ")
+        print(f"   Expected MP3 path: {expected_mp3_path}")
+        print(f"   MP3 EXISTS: {os.path.exists(expected_mp3_path)}")
+        print(f"   ")
+        print(f"   Expected WAV path: {expected_wav_path}")
+        print(f"   WAV EXISTS: {os.path.exists(expected_wav_path)}")
+        print(f"   ")
+        print(f"   Generated MP3 URL: {mp3_url}")
+        print(f"   Generated WAV URL: {wav_url}")
+        print(f"{'='*60}\n")
+        
+        # Log to UI as well
+        log_message(f"📥 URL MP3: {mp3_url}")
+        log_message(f"📥 URL WAV: {wav_url}")
         
         # Prepare and send track info to API (for MP3)
         track_info_mp3 = {
@@ -1021,6 +1041,39 @@ def list_files():
         if os.path.isdir(subdir_path):
             result[subdir] = os.listdir(subdir_path)
     return jsonify(result)
+
+# Test route to check URL generation
+@app.route('/test_download')
+def test_download():
+    """Test route that lists all files with their download URLs and tests them."""
+    results = []
+    
+    for subdir in os.listdir(PROCESSED_FOLDER):
+        subdir_path = os.path.join(PROCESSED_FOLDER, subdir)
+        if os.path.isdir(subdir_path):
+            for filename in os.listdir(subdir_path):
+                file_path = os.path.join(subdir_path, filename)
+                rel_path = f"{subdir}/{filename}"
+                url = f"/download_file?path={urllib.parse.quote(rel_path, safe='/')}"
+                
+                # Test if the path would work
+                test_path = os.path.join(PROCESSED_FOLDER, rel_path)
+                
+                results.append({
+                    'subdir': subdir,
+                    'filename': filename,
+                    'rel_path': rel_path,
+                    'url': url,
+                    'file_exists_at_original': os.path.exists(file_path),
+                    'file_exists_at_test_path': os.path.exists(test_path),
+                    'paths_match': file_path == test_path
+                })
+    
+    return jsonify({
+        'PROCESSED_FOLDER': PROCESSED_FOLDER,
+        'total_files': len(results),
+        'files': results
+    })
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup_files():
