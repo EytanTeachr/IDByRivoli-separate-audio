@@ -467,7 +467,7 @@
                 return;
             }
 
-            // --- IMPROVED UPLOAD LOGIC START ---
+            // --- IMPROVED UPLOAD LOGIC START (SEQUENTIAL) ---
             document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('logContainer').style.display = 'block'; // Show logs
             document.getElementById('results').style.display = 'none';
@@ -475,57 +475,94 @@
             
             const progressBar = document.getElementById('progressFill');
             const statusText = document.getElementById('statusText');
+            const logContainer = document.getElementById('logContainer');
             
-            statusText.textContent = "Préparation de l'upload...";
+            statusText.textContent = "Démarrage de l'upload séquentiel...";
+            
+            let uploadedCount = 0;
+            let totalFiles = selectedFiles.length;
+            let failedFiles = [];
 
-            const formData = new FormData();
-            for (let i = 0; i < selectedFiles.length; i++) {
-                formData.append('files[]', selectedFiles[i]);
+            // Function to upload a single file
+            const uploadSingleFile = async (file) => {
+                return new Promise((resolve, reject) => {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/upload_chunk', true);
+
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            resolve();
+                        } else {
+                            reject(`Erreur ${xhr.status}: ${xhr.statusText}`);
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        reject("Erreur réseau");
+                    };
+
+                    xhr.send(formData);
+                });
+            };
+
+            // Process uploads sequentially (chunk by chunk or one by one)
+            // One by one is safest for strict server limits, but we can do small parallel batches if needed.
+            // Let's stick to strict 1-by-1 to be safe as requested.
+            
+            for (let i = 0; i < totalFiles; i++) {
+                const file = selectedFiles[i];
+                const percentComplete = Math.round(((i) / totalFiles) * 100);
+                
+                progressBar.style.width = percentComplete + '%';
+                statusText.textContent = `UPLOAD EN COURS : ${i + 1}/${totalFiles} fichiers (${percentComplete}%)`;
+                
+                // Add log entry for start of upload
+                // logContainer.innerHTML += `<div class="log-entry">Upload: ${file.name}...</div>`;
+                // logContainer.scrollTop = logContainer.scrollHeight;
+
+                try {
+                    await uploadSingleFile(file);
+                    uploadedCount++;
+                } catch (error) {
+                    console.error(`Failed to upload ${file.name}:`, error);
+                    failedFiles.push(file.name);
+                    logContainer.innerHTML += `<div class="log-entry" style="color:red;">❌ Echec upload: ${file.name}</div>`;
+                }
             }
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload', true);
+            // All uploads finished
+            progressBar.style.width = '100%';
+            
+            if (uploadedCount === 0) {
+                alert("Tous les uploads ont échoué.");
+                document.getElementById('submitBtn').disabled = false;
+                return;
+            }
 
-            // Track Upload Progress
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = (e.loaded / e.total) * 100;
-                    const loadedMB = (e.loaded / (1024 * 1024)).toFixed(2);
-                    const totalMB = (e.total / (1024 * 1024)).toFixed(2);
-                    
-                    progressBar.style.width = percentComplete + '%';
-                    
-                    // Show detailed upload stats
-                    statusText.textContent = `UPLOAD EN COURS : ${Math.round(percentComplete)}% (${loadedMB} MB / ${totalMB} MB)`;
-                }
-            };
+            statusText.textContent = `Upload terminé (${uploadedCount}/${totalFiles}). Démarrage du traitement...`;
+            
+            if (failedFiles.length > 0) {
+                logContainer.innerHTML += `<div class="log-entry" style="color:orange;">⚠️ ${failedFiles.length} fichiers n'ont pas pu être uploadés.</div>`;
+            }
 
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    // Upload finished, start processing polling
-                    statusText.textContent = "Upload terminé. Démarrage du traitement IA...";
+            // Call start_processing
+            try {
+                const response = await fetch('/start_processing', { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    logContainer.innerHTML += `<div class="log-entry">✅ Traitement déclenché avec succès.</div>`;
                     startPolling();
                 } else {
-                    let errorMessage = 'Erreur upload';
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        errorMessage = response.error || errorMessage;
-                    } catch(e) {}
-                    
-                    console.error("Upload error:", errorMessage);
-                    alert('Erreur: ' + errorMessage);
-                    document.getElementById('submitBtn').disabled = false;
-                    document.getElementById('progressContainer').style.display = 'none';
+                    throw new Error(result.error || 'Erreur inconnue au lancement du traitement');
                 }
-            };
-
-            xhr.onerror = function() {
-                alert('Erreur réseau lors de l\'upload.');
+            } catch (error) {
+                alert('Erreur au lancement du traitement: ' + error.message);
                 document.getElementById('submitBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
-            };
-
-            xhr.send(formData);
+            }
             // --- IMPROVED UPLOAD LOGIC END ---
         });
 

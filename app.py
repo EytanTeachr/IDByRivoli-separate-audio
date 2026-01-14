@@ -660,31 +660,45 @@ def index():
     version_info = get_git_info()
     return render_template('index.html', version_info=version_info)
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
+@app.route('/upload_chunk', methods=['POST'])
+def upload_chunk():
+    """
+    Receives a single file upload and saves it to the upload folder.
+    This allows the frontend to sequence uploads 1 by 1.
+    """
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+        
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file:
+        filename = file.filename
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        return jsonify({'message': f'File {filename} uploaded successfully'})
+
+@app.route('/start_processing', methods=['POST'])
+def start_processing():
+    """
+    Triggered after all uploads are done.
+    Scans the uploads folder and starts the processing thread.
+    """
     global job_status
     
     if job_status['state'] == 'processing':
-        # Check if the process is actually running/alive?
-        # Sometimes state gets stuck if thread died silently.
-        # But for now, we assume user is impatient or trying to upload while busy.
-        # Let's allow FORCE reset if they reload page?
-        # No, that might break current job.
-        
-        # NOTE FOR USER: If you get this 409 error repeatedly without any active process visible,
-        # it might be a stuck state. Restart the server (pkill python; python app.py) to fix.
         return jsonify({'error': 'Un traitement est déjà en cours. Veuillez patienter.'}), 409
 
-    if 'files[]' not in request.files:
-         return jsonify({'error': 'Aucun fichier envoyé'}), 400
+    # Scan upload folder for MP3s
+    files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.lower().endswith('.mp3')]
     
-    files = request.files.getlist('files[]')
-    
-    if not files or files[0].filename == '':
-        return jsonify({'error': 'Aucun fichier sélectionné'}), 400
+    if not files:
+        return jsonify({'error': 'Aucun fichier trouvé dans le dossier uploads'}), 400
 
-    saved_filepaths = []
-    original_filenames = []
+    saved_filepaths = [os.path.join(app.config['UPLOAD_FOLDER'], f) for f in files]
+    original_filenames = files # filenames are just the basenames
     
     job_status = {
         'state': 'starting',
@@ -698,20 +712,19 @@ def upload_file():
         'logs': []
     }
     
-    log_message(f"Traitement démarré pour {len(files)} fichier(s)")
-    
-    for file in files:
-        if file.filename:
-            filename = file.filename
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            saved_filepaths.append(filepath)
-            original_filenames.append(filename)
+    log_message(f"Traitement démarré pour {len(files)} fichier(s) (Mode Batch)")
     
     thread = threading.Thread(target=run_demucs_thread, args=(saved_filepaths, original_filenames))
     thread.start()
     
     return jsonify({'message': 'Traitement démarré', 'total_files': len(files)})
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # Keep legacy endpoint for backward compatibility if needed, 
+    # but strictly we should move to the new flow.
+    # ... (redirecting to new logic ideally, but let's keep it simple)
+    return jsonify({'error': 'Please use the new sequential upload flow'}), 400
 
 @app.route('/status')
 def status():
