@@ -5,149 +5,268 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ID By Rivoli - Audio Processor</title>
     <style>
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Variable.ttf') format('truetype');
+            font-weight: 200 700;
+            font-display: swap;
+        }
+        
+        /* Fallback for individual weights if Variable font fails or isn't supported */
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Semibold.ttf') format('truetype');
+            font-weight: 600;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'ClashGrotesk';
+            src: url('/static/fonts/ClashGrotesk-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-display: swap;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'ClashGrotesk', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
+            background-color: #000000; /* Dark Mode ID By Rivoli style */
+            color: #ffffff;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 40px 40px;
         }
         h1 {
-            color: #2c3e50;
+            color: #ffffff;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 2px;
+            font-size: 3em;
+            margin-top: 40px;
         }
         .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background-color: #0a0a0a;
+            padding: 50px;
+            border-radius: 0;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
+            max-width: 800px;
+            margin: 0 auto;
         }
         .upload-area {
-            border: 2px dashed #3498db;
-            padding: 60px;
+            border: 2px dashed #444;
+            padding: 80px;
             text-align: center;
-            border-radius: 8px;
-            background-color: #f0f8ff;
+            border-radius: 0;
+            background-color: #111;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         .upload-area:hover {
-            background-color: #e1f0fa;
+            background-color: #1a1a1a;
+            border-color: #fff;
+            box-shadow: 0 0 30px rgba(255,255,255,0.05);
         }
         input[type="file"] {
             display: none;
         }
         .file-label {
-            font-size: 1.4em;
-            color: #3498db;
+            font-size: 1.2em;
+            color: #fff;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+        }
+        .file-sublabel {
+            font-size: 0.8em; 
+            color: #666; 
+            font-weight: 400; 
+            margin-top: 10px; 
+            display: block;
         }
         button {
-            background-color: #2ecc71;
-            color: white;
-            padding: 15px 30px;
-            margin-top: 20px;
-            border: none;
+            background-color: #ffffff;
+            color: #000000;
+            padding: 20px 40px;
+            margin-top: 30px;
+            border: 1px solid #fff;
             cursor: pointer;
-            border-radius: 6px;
-            font-size: 18px;
+            border-radius: 0;
+            font-family: 'ClashGrotesk', sans-serif; /* Explicit font for button */
+            font-size: 16px;
             width: 100%;
-            transition: background-color 0.3s;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 2px;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
         }
         button:hover {
-            background-color: #27ae60;
+            background-color: #000000;
+            color: #ffffff;
+            letter-spacing: 3px;
         }
         button:disabled {
-            background-color: #bdc3c7;
+            background-color: #333;
+            color: #666;
+            border-color: #333;
             cursor: not-allowed;
+            letter-spacing: 2px;
         }
         
         .progress-container {
-            margin-top: 30px;
+            margin-top: 40px;
             display: none;
         }
         .progress-bar {
             width: 100%;
-            height: 30px;
-            background-color: #ecf0f1;
-            border-radius: 15px;
+            height: 2px;
+            background-color: #333;
+            border-radius: 0;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         .progress-fill {
             height: 100%;
-            background-color: #3498db;
+            background-color: #fff;
             width: 0%;
             transition: width 0.5s ease;
-            text-align: center;
-            line-height: 30px;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
+            box-shadow: 0 0 10px #fff;
         }
         .status-text {
             text-align: center;
-            color: #7f8c8d;
-            font-style: italic;
-            font-size: 1.1em;
+            color: #888;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 15px;
+        }
+
+        .log-container {
+            margin-top: 30px;
+            background-color: #000;
+            border: 1px solid #333;
+            height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            color: #0f0;
+            display: none; /* Hidden by default */
+            text-align: left;
+        }
+        .log-entry {
+            margin-bottom: 2px;
+            border-bottom: 1px solid #111;
+            padding-bottom: 2px;
         }
 
         .results {
-            margin-top: 40px;
+            margin-top: 60px;
             display: none;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
         }
         .track-block {
-            background-color: white;
-            border: 1px solid #ddd;
+            background-color: #0a0a0a;
+            border: 1px solid #333;
             margin-bottom: 20px;
-            border-radius: 8px;
+            border-radius: 0;
             overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .track-block:hover {
+            border-color: #555;
         }
         .track-header {
-            background-color: #34495e;
+            background-color: #111;
             color: white;
-            padding: 15px;
-            font-size: 1.2em;
-            font-weight: bold;
+            padding: 20px;
+            font-size: 1.1em;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 1px solid #222;
+            letter-spacing: 1px;
         }
         .edits-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 10px;
-            padding: 15px;
+            gap: 1px;
+            background-color: #222; /* Gap color */
+            padding: 1px;
         }
         .edit-item {
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 4px;
-            border: 1px solid #eee;
+            background-color: #0a0a0a;
+            padding: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.2s;
+        }
+        .edit-item:hover {
+            background-color: #111;
         }
         .edit-name {
             font-weight: 500;
             font-size: 0.9em;
+            text-transform: uppercase;
+            color: #ddd;
+            letter-spacing: 0.5px;
         }
         .download-btn {
             text-decoration: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            margin-left: 5px;
-            color: white;
+            padding: 8px 16px;
+            border-radius: 0;
+            font-size: 0.75em;
+            margin-left: 12px; /* Increased margin */
+            color: #000;
+            text-transform: uppercase;
+            font-weight: 700;
+            border: 1px solid #fff;
+            transition: all 0.2s;
+            display: inline-block; /* Ensure block model for margins */
         }
-        .dl-mp3 { background-color: #e67e22; }
-        .dl-wav { background-color: #9b59b6; }
+        .dl-mp3 { background-color: #fff; }
+        .dl-wav { background-color: transparent; color: #fff; }
+        
+        .dl-mp3:hover { background-color: #000; color: #fff; }
+        .dl-wav:hover { background-color: #fff; color: #000; }
         
         #fileList {
-            margin-top: 20px;
+            margin-top: 25px;
             text-align: left;
             max-height: 200px;
             overflow-y: auto;
+            border-top: 1px solid #333;
+            padding-top: 15px;
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        /* Rivoli Specific adjustments */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #000; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555; 
         }
     </style>
 </head>
@@ -155,18 +274,33 @@
     <h1>ID By Rivoli - Audio Processor</h1>
     
     <div class="container">
+        <!-- Added Version Info -->
+        <div style="position: absolute; top: 20px; right: 20px; color: #666; font-size: 0.8em; text-align: right;">
+            {{ version_info }}
+        </div>
+
         <form id="uploadForm" enctype="multipart/form-data">
-            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                <label for="fileInput" class="file-label">
-                    📁 DRAG & DROP ou CLIQUEZ ICI
-                    <br><span style="font-size: 0.7em; color: #7f8c8d; font-weight: normal;">(Jusqu'à 100 fichiers MP3)</span>
+            <div class="upload-area" id="dropZone">
+                <label class="file-label">
+                    📁 DRAG & DROP ou 
+                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('fileInput').click()">AJOUTER FICHIERS</span> / 
+                    <span style="text-decoration: underline; cursor: pointer;" onclick="document.getElementById('folderInput').click()">AJOUTER DOSSIER</span>
+                    <span class="file-sublabel">(Jusqu'à 1000 fichiers MP3 - Cumulable)</span>
                 </label>
-                <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple required onchange="updateFileList()">
+                <!-- Standard File Input -->
+                <input type="file" id="fileInput" name="files[]" accept=".mp3" multiple style="display: none;">
+                <!-- Folder Input -->
+                <input type="file" id="folderInput" name="files[]" webkitdirectory directory multiple style="display: none;">
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                <div id="fileCount" style="font-weight: bold; color: #fff;">0 fichier(s) prêt(s)</div>
+                <button type="button" onclick="clearFiles()" style="width: auto; padding: 10px 20px; margin: 0; background-color: #333; font-size: 0.8em;">🗑️ Vider la liste</button>
             </div>
             
             <div id="fileList"></div>
 
-            <button type="submit" id="submitBtn">Lancer le Traitement (Séparation + Edits)</button>
+            <button type="submit" id="submitBtn">Lancer l'Upload et le Traitement Automatique</button>
         </form>
 
         <div id="progressContainer" class="progress-container">
@@ -175,70 +309,297 @@
                 <div id="progressFill" class="progress-fill">0%</div>
             </div>
             <p id="statusText" class="status-text">Initialisation...</p>
+            
+            <div id="logContainer" class="log-container"></div>
         </div>
     </div>
 
-    <div id="results" class="results">
-        <h2>Résultats</h2>
-        <div id="resultsList"></div>
-    </div>
+        <div id="results" class="results">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin:0;">Résultats</h2>
+                
+                <div style="display: flex; gap: 10px;">
+                    <a href="/download_all_zip" class="download-btn dl-mp3" style="font-size: 1.1em; padding: 15px 30px; background-color: #fff; color: #000; border: 1px solid #fff;">
+                        📦 Tout Télécharger (.ZIP)
+                    </a>
+                    
+                    <button onclick="confirmCleanup()" style="font-size: 1.1em; padding: 15px 30px; background-color: #e74c3c; color: #fff; border: 1px solid #c0392b; width: auto; margin: 0;">
+                        🧹 Tout est fini, libérer l'espace
+                    </button>
+                </div>
+            </div>
+            <div id="resultsList"></div>
+        </div>
 
     <script>
-        function updateFileList() {
-            const input = document.getElementById('fileInput');
-            const list = document.getElementById('fileList');
-            list.innerHTML = '';
-            
-            if (input.files.length > 0) {
-                const count = document.createElement('div');
-                count.style.fontWeight = 'bold';
-                count.style.marginBottom = '10px';
-                count.textContent = `${input.files.length} fichier(s) sélectionné(s)`;
-                list.appendChild(count);
+        function confirmCleanup() {
+            if (confirm("ATTENTION : Cela va supprimer TOUS les fichiers (uploads, résultats, logs) du serveur pour libérer de l'espace.\n\nÊtes-vous sûr d'avoir tout récupéré ?")) {
+                fetch('/cleanup', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert("Espace libéré avec succès !");
+                        location.reload(); // Reload page to reset UI
+                    } else {
+                        alert("Erreur lors du nettoyage : " + data.error);
+                    }
+                })
+                .catch(err => alert("Erreur réseau : " + err));
             }
+        }
+    
+        let selectedFiles = [];
+
+        // File Input Change
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            handleNewFiles(Array.from(this.files));
+        });
+
+        // Folder Input Change
+        document.getElementById('folderInput').addEventListener('change', function(e) {
+            handleNewFiles(Array.from(this.files));
+        });
+
+        function handleNewFiles(files) {
+            // Filter for MP3s
+            const newMp3s = files.filter(f => f.name.toLowerCase().endsWith('.mp3'));
+            
+            // Add to existing list, avoiding duplicates (by name + size to be safe)
+            let addedCount = 0;
+            newMp3s.forEach(newFile => {
+                const exists = selectedFiles.some(existing => 
+                    existing.name === newFile.name && existing.size === newFile.size
+                );
+                if (!exists) {
+                    selectedFiles.push(newFile);
+                    addedCount++;
+                }
+            });
+
+            updateFileList();
+        }
+
+        function clearFiles() {
+            selectedFiles = [];
+            updateFileList();
+            // Reset inputs to allow selecting same files again if needed
+            document.getElementById('fileInput').value = '';
+            document.getElementById('folderInput').value = '';
+        }
+
+        function updateFileList() {
+            const list = document.getElementById('fileList');
+            const countLabel = document.getElementById('fileCount');
+            
+            list.innerHTML = '';
+            countLabel.textContent = `${selectedFiles.length} fichier(s) prêt(s)`;
+            
+            if (selectedFiles.length > 0) {
+                // List individual files (limit to first 50)
+                const limit = 50;
+                for(let i=0; i<Math.min(selectedFiles.length, limit); i++) {
+                    const item = document.createElement('div');
+                    item.textContent = `- ${selectedFiles[i].name}`;
+                    list.appendChild(item);
+                }
+                if (selectedFiles.length > limit) {
+                    const more = document.createElement('div');
+                    more.style.fontStyle = 'italic';
+                    more.textContent = `...et ${selectedFiles.length - limit} autres.`;
+                    list.appendChild(more);
+                }
+            } else {
+                const empty = document.createElement('div');
+                empty.style.color = '#666';
+                empty.style.fontStyle = 'italic';
+                empty.textContent = 'Aucun fichier dans la liste.';
+                list.appendChild(empty);
+            }
+        }
+
+        // Drag and Drop Logic
+        const dropZone = document.getElementById('dropZone');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.style.backgroundColor = '#1a1a1a';
+            dropZone.style.borderColor = '#fff';
+        }
+
+        function unhighlight(e) {
+            dropZone.style.backgroundColor = '#111';
+            dropZone.style.borderColor = '#444';
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        async function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const items = dt.items;
+            let files = [];
+
+            if (items) {
+                const queue = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                        if (entry) {
+                            queue.push(entry);
+                        } else {
+                            const file = item.getAsFile();
+                            if (file) files.push(file);
+                        }
+                    }
+                }
+                
+                while (queue.length > 0) {
+                    const entry = queue.shift();
+                    if (entry.isFile) {
+                        files.push(await getFileFromEntry(entry));
+                    } else if (entry.isDirectory) {
+                        const entries = await readAllDirectoryEntries(entry.createReader());
+                        queue.push(...entries);
+                    }
+                }
+            } else {
+                files = Array.from(dt.files);
+            }
+            
+            handleNewFiles(files);
+        }
+
+        function getFileFromEntry(entry) {
+            return new Promise(resolve => {
+                entry.file(file => resolve(file));
+            });
+        }
+
+        function readAllDirectoryEntries(directoryReader) {
+            return new Promise(resolve => {
+                let entries = [];
+                const readEntries = () => {
+                    directoryReader.readEntries(results => {
+                        if (!results.length) {
+                            resolve(entries);
+                        } else {
+                            entries = entries.concat(results);
+                            readEntries();
+                        }
+                    });
+                };
+                readEntries();
+            });
         }
 
         let pollingInterval;
 
-        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            document.getElementById('uploadForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const fileInput = document.getElementById('fileInput');
-            if (fileInput.files.length === 0) {
+            if (selectedFiles.length === 0) {
                 alert('Veuillez sélectionner au moins un fichier.');
                 return;
             }
 
-            const formData = new FormData();
-            for (let i = 0; i < fileInput.files.length; i++) {
-                formData.append('files[]', fileInput.files[i]);
-            }
-
+            // --- IMPROVED UPLOAD LOGIC START (SEQUENTIAL) ---
             document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('results').style.display = 'none';
+            document.getElementById('logContainer').style.display = 'block'; // Show logs
+            document.getElementById('results').style.display = 'block'; // ALWAYS SHOW RESULTS NOW
             document.getElementById('submitBtn').disabled = true;
-            document.getElementById('statusText').textContent = "Upload des fichiers...";
+            
+            const progressBar = document.getElementById('progressFill');
+            const statusText = document.getElementById('statusText');
+            const logContainer = document.getElementById('logContainer');
+            
+            statusText.textContent = "Démarrage de l'upload séquentiel et mise en file d'attente...";
+            
+            let uploadedCount = 0;
+            let totalFiles = selectedFiles.length;
+            let failedFiles = [];
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
+            // Function to upload a single file
+            const uploadSingleFile = async (file) => {
+                return new Promise((resolve, reject) => {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/upload_chunk', true);
+
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            resolve();
+                        } else {
+                            reject(`Erreur ${xhr.status}: ${xhr.statusText}`);
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        reject("Erreur réseau");
+                    };
+
+                    xhr.send(formData);
                 });
+            };
 
-                const data = await response.json();
+            // Start polling for status immediately so user sees queue processing
+            startPolling();
+
+            for (let i = 0; i < totalFiles; i++) {
+                const file = selectedFiles[i];
+                const percentComplete = Math.round(((i) / totalFiles) * 100);
                 
-                if (response.status !== 200) {
-                    throw new Error(data.error || 'Erreur upload');
+                progressBar.style.width = percentComplete + '%';
+                statusText.textContent = `UPLOAD EN COURS : ${i + 1}/${totalFiles} (${percentComplete}%) - Traitement en arrière-plan...`;
+                
+                try {
+                    // 1. Upload File
+                    await uploadSingleFile(file);
+                    uploadedCount++;
+                    
+                    // 2. Enqueue for Processing IMMEDIATELY
+                    await fetch('/enqueue_file', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ filename: file.name })
+                    });
+
+                } catch (error) {
+                    console.error(`Failed to upload ${file.name}:`, error);
+                    failedFiles.push(file.name);
+                    logContainer.innerHTML += `<div class="log-entry" style="color:red;">❌ Echec upload: ${file.name}</div>`;
                 }
-
-                startPolling();
-
-            } catch (error) {
-                console.error(error);
-                alert('Erreur: ' + error.message);
-                document.getElementById('submitBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
             }
+
+            // All uploads finished
+            progressBar.style.width = '100%';
+            statusText.textContent = `Uploads terminés. Le traitement continue en arrière-plan.`;
+            
+            if (failedFiles.length > 0) {
+                logContainer.innerHTML += `<div class="log-entry" style="color:orange;">⚠️ ${failedFiles.length} fichiers n'ont pas pu être uploadés.</div>`;
+            }
+
+            // Keep submit button disabled to avoid double submission, 
+            // but maybe allow "Clear & New Batch" later.
+            // document.getElementById('submitBtn').disabled = false;
+
         });
 
         function startPolling() {
@@ -249,18 +610,24 @@
 
                     const progressFill = document.getElementById('progressFill');
                     const statusText = document.getElementById('statusText');
+                    const logContainer = document.getElementById('logContainer');
+
+                    // Update Logs
+                    if (status.logs && status.logs.length > 0) {
+                        logContainer.innerHTML = status.logs.map(log => `<div class="log-entry">${log}</div>`).join('');
+                        logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll to bottom
+                    }
 
                     if (status.state === 'processing') {
                         const percent = status.progress;
                         progressFill.style.width = percent + '%';
                         progressFill.textContent = percent + '%';
                         
-                        // Show different message for phase 1 (Demucs) vs phase 2 (Edits)
-                        if (percent < 50) {
-                            statusText.textContent = `Séparation Audio (IA): ${status.current_file_idx} / ${status.total_files}`;
-                        } else {
-                            statusText.textContent = `Génération des Edits (Cutting/Merging): ${status.current_file_idx} / ${status.total_files}`;
-                        }
+                        // Show detailed step and file info
+                        const step = status.current_step || 'Traitement...';
+                        const file = status.current_filename ? `| Fichier : ${status.current_filename}` : '';
+                        
+                        statusText.textContent = `${step} ${file}`;
                     } 
                     else if (status.state === 'completed') {
                         clearInterval(pollingInterval);
@@ -298,8 +665,8 @@
                         <div class="edit-item">
                             <span class="edit-name">${edit.name}</span>
                             <div>
-                                <a href="${edit.mp3}" class="download-btn dl-mp3" target="_blank" download>MP3</a>
-                                <a href="${edit.wav}" class="download-btn dl-wav" target="_blank" download>WAV</a>
+                                <a href="${edit.mp3}" class="download-btn dl-mp3" download="${edit.name}.mp3">MP3</a>
+                                <a href="${edit.wav}" class="download-btn dl-wav" download="${edit.name}.wav">WAV</a>
                             </div>
                         </div>
                     `;
