@@ -662,6 +662,30 @@ def index():
 
 import queue
 
+import json
+
+# Persistence File
+HISTORY_FILE = os.path.join(BASE_DIR, 'processed_history.json')
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_to_history(filename):
+    history = load_history()
+    if filename not in history:
+        history.append(filename)
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(history, f)
+
+# Load initial history
+processed_history = load_history()
+
 # Global Queue for processing tracks
 track_queue = queue.Queue()
 
@@ -673,8 +697,24 @@ def worker():
             if filename is None:
                 break
             
+            # Check if already processed
+            if filename in load_history():
+                log_message(f"⏩ Déjà traité (ignoré) : {filename}")
+                track_queue.task_done()
+                continue
+            
             filepath = os.path.join(UPLOAD_FOLDER, filename)
+            
+            # Check if file exists (might have been deleted)
+            if not os.path.exists(filepath):
+                 log_message(f"⚠️ Fichier introuvable (ignoré) : {filename}")
+                 track_queue.task_done()
+                 continue
+
             process_single_track(filepath, filename)
+            
+            # Mark as done in history
+            save_to_history(filename)
             
             track_queue.task_done()
         except Exception as e:
@@ -684,6 +724,25 @@ def worker():
 # Start worker thread
 worker_thread = threading.Thread(target=worker, daemon=True)
 worker_thread.start()
+
+# Restore pending files on startup
+def restore_queue():
+    """Scans upload folder and re-queues files that haven't been processed yet."""
+    log_message("🔄 Vérification des fichiers en attente...")
+    upload_files = [f for f in os.listdir(UPLOAD_FOLDER) if f.lower().endswith('.mp3')]
+    history = load_history()
+    
+    count = 0
+    for f in upload_files:
+        if f not in history:
+            track_queue.put(f)
+            count += 1
+            
+    if count > 0:
+        log_message(f"♻️ Restauration de {count} fichiers dans la file d'attente.")
+
+# Call restore on startup
+restore_queue()
 
 # Modified process function for SINGLE track
 def process_single_track(filepath, filename):
@@ -831,6 +890,51 @@ def upload_file():
 def status():
     # Update queue info in status
     job_status['queue_size'] = track_queue.qsize()
+    
+    # If results are empty (e.g. after restart), populate them from disk
+    if not job_status['results']:
+        processed_dirs = [d for d in os.listdir(PROCESSED_FOLDER) if os.path.isdir(os.path.join(PROCESSED_FOLDER, d))]
+        for d in processed_dirs:
+            # Reconstruct result object
+            track_dir = os.path.join(PROCESSED_FOLDER, d)
+            files = [f for f in os.listdir(track_dir) if f.endswith(('.mp3', '.wav'))]
+            
+            # Simple reconstruction of edits list
+            edits = []
+            for f in files:
+                ext = 'mp3' if f.endswith('.mp3') else 'wav'
+                # Try to guess edit type from filename suffix? 
+                # Not strictly necessary for display, just name and URL needed.
+                # Filename: "Track Name Suffix.mp3"
+                
+                subdir = d
+                url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(f)}"
+                
+                # We only want one entry per edit type (MP3/WAV pair ideally), 
+                # but for simple display list, we can group them in UI or just send raw.
+                # The UI expects objects with {name, mp3, wav}.
+                pass 
+            
+            # Better approach: Group by name (without extension)
+            grouped = {}
+            for f in files:
+                name_no_ext = os.path.splitext(f)[0]
+                if name_no_ext not in grouped:
+                    grouped[name_no_ext] = {'name': name_no_ext, 'mp3': '#', 'wav': '#'}
+                
+                subdir = d
+                url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(f)}"
+                
+                if f.endswith('.mp3'):
+                    grouped[name_no_ext]['mp3'] = url
+                else:
+                    grouped[name_no_ext]['wav'] = url
+            
+            job_status['results'].append({
+                'original': d,
+                'edits': list(grouped.values())
+            })
+            
     return jsonify(job_status)
 
 @app.route('/download_processed/<path:subdir>/<path:filename>')
@@ -894,7 +998,11 @@ def cleanup_files():
         with track_queue.mutex:
             track_queue.queue.clear()
             
-        log_message("🧹 Espace disque nettoyé avec succès.")
+        # Clear History
+        if os.path.exists(HISTORY_FILE):
+            os.remove(HISTORY_FILE)
+            
+        log_message("🧹 Espace disque et historique nettoyés avec succès.")
         return jsonify({'message': 'Cleanup successful'})
         
     except Exception as e:
