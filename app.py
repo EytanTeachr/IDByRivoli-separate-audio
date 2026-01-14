@@ -58,35 +58,43 @@ import io
 def download_all_zip():
     """
     Creates a ZIP file containing all processed tracks and sends it to the user.
+    Can be called at any time to get currently finished tracks.
     """
     global job_status
     
-    if job_status['state'] != 'completed' or not job_status['results']:
-        return jsonify({'error': 'Aucun traitement terminé à télécharger'}), 400
+    # Refresh results from disk if needed
+    if not job_status['results']:
+        # ... (logic to populate from disk, similar to status route)
+        processed_dirs = [d for d in os.listdir(PROCESSED_FOLDER) if os.path.isdir(os.path.join(PROCESSED_FOLDER, d))]
+        # We need to rebuild job_status['results'] or just iterate dirs directly
+        pass 
 
     # Create an in-memory ZIP file
     memory_file = io.BytesIO()
     
+    # We zip everything currently in PROCESSED_FOLDER
+    has_files = False
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for result in job_status['results']:
-            track_name = result['original']
-            track_dir = os.path.join(PROCESSED_FOLDER, track_name)
-            
-            if os.path.exists(track_dir):
-                for root, dirs, files in os.walk(track_dir):
-                    for file in files:
-                        if file.lower().endswith(('.mp3', '.wav')): 
-                            file_path = os.path.join(root, file)
-                            arcname = os.path.join(track_name, file)
-                            zf.write(file_path, arcname)
+        for root, dirs, files in os.walk(PROCESSED_FOLDER):
+             for file in files:
+                if file.lower().endswith(('.mp3', '.wav')): 
+                    file_path = os.path.join(root, file)
+                    # Create relative path inside zip: "Track Name/Track Name Main.mp3"
+                    rel_path = os.path.relpath(file_path, PROCESSED_FOLDER)
+                    zf.write(file_path, rel_path)
+                    has_files = True
+
+    if not has_files:
+        return jsonify({'error': 'Aucun fichier traité disponible pour le moment'}), 400
 
     memory_file.seek(0)
     
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
     return send_file(
         memory_file,
         mimetype='application/zip',
         as_attachment=True,
-        download_name='ID_By_Rivoli_Edits_Pack.zip'
+        download_name=f'ID_By_Rivoli_Pack_{timestamp}.zip'
     )
 
 def clean_filename(filename):
