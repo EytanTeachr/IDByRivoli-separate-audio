@@ -341,7 +341,9 @@ def send_track_info_to_api(track_data):
         }
         
         # Log the URL being sent
-        print(f"📤 API: {track_data['Titre']} ({track_data['Format']}) → {track_data.get('Fichiers', 'N/A')}")
+        print(f"📤 API: {track_data['Titre']} ({track_data['Format']})")
+        print(f"   📁 Fichier: {track_data.get('Fichiers', 'N/A')}")
+        print(f"   🖼️ Cover: {track_data.get('Url', 'N/A')}")
         
         response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=30)
         
@@ -398,21 +400,31 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         relative_url = edit_info.get('url', '')
         absolute_url = f"{base_url}{relative_url}" if relative_url else ''
         
-        # Extract original cover (Cover 2) and save it, then use that URL
-        cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"  # Fallback
+        # Extract original cover (Cover 2) from source file and use that URL
+        cover_url = f"{base_url}/static/covers/Cover_Id_by_Rivoli.jpeg"  # Fallback only
+        original_cover_found = False
         
         # Try to extract original cover from source file
         if original_tags:
+            # Look for any APIC (cover art) that is NOT the ID By Rivoli cover
             for apic_key in original_tags.keys():
-                if apic_key.startswith('APIC:'):
+                if apic_key.startswith('APIC'):
                     try:
                         original_apic = original_tags[apic_key]
+                        
+                        # Skip if this is our ID By Rivoli cover (check description)
+                        apic_desc = getattr(original_apic, 'desc', '')
+                        if 'ID By Rivoli' in str(apic_desc):
+                            print(f"   ⏭️ Skipping ID By Rivoli cover: {apic_key}")
+                            continue
+                        
                         # Generate unique filename based on track
                         track_name_clean = re.sub(r'[^\w\s-]', '', os.path.splitext(os.path.basename(original_path))[0])
                         track_name_clean = track_name_clean.replace(' ', '_')[:50]
                         
                         # Determine extension from mime type
-                        ext = 'jpg' if 'jpeg' in original_apic.mime else 'png'
+                        mime = getattr(original_apic, 'mime', 'image/jpeg')
+                        ext = 'jpg' if 'jpeg' in mime.lower() else 'png'
                         cover_filename = f"cover_{track_name_clean}.{ext}"
                         cover_save_path = os.path.join(BASE_DIR, 'static', 'covers', cover_filename)
                         
@@ -422,9 +434,14 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
                         
                         # Use the original cover URL
                         cover_url = f"{base_url}/static/covers/{cover_filename}"
+                        original_cover_found = True
+                        print(f"   ✅ Cover originale extraite: {cover_filename}")
                         break
                     except Exception as e:
-                        print(f"Could not extract original cover: {e}")
+                        print(f"   ❌ Could not extract cover from {apic_key}: {e}")
+        
+        if not original_cover_found:
+            print(f"   ⚠️ Pas de cover originale trouvée, utilisation cover ID By Rivoli")
         
         # Generate Track ID (clean format: no dashes, single underscores only)
         filename_raw = edit_info.get('name', '')
