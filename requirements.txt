@@ -1,6 +1,11 @@
 flask
+torch
+torchaudio
 demucs
 dora-search
+julius
+diffq
+lameenc
 mutagen
 pydub
 numpy
@@ -8,3 +13,4 @@ librosa
 scipy
 soundfile
 requests
+openunmix
