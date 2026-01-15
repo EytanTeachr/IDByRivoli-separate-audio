@@ -1108,27 +1108,7 @@ import queue
 
 import json
 
-# Persistence File
-HISTORY_FILE = os.path.join(BASE_DIR, 'processed_history.json')
-
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-def save_to_history(filename):
-    history = load_history()
-    if filename not in history:
-        history.append(filename)
-        with open(HISTORY_FILE, 'w') as f:
-            json.dump(history, f)
-
-# Load initial history
-processed_history = load_history()
+# No duplicate checking - all tracks are processed fresh each time
 
 # Global Queue for processing tracks
 track_queue = queue.Queue()
@@ -1152,16 +1132,6 @@ def worker():
             # Get session-specific status
             current_status = get_job_status(session_id)
             
-            # Check if already processed
-            if filename in load_history():
-                log_message(f"⏩ Déjà traité (ignoré) : {filename}", session_id)
-                track_queue.task_done()
-                if track_queue.empty():
-                    current_status['state'] = 'idle'
-                    current_status['current_step'] = ''
-                    current_status['current_filename'] = ''
-                continue
-            
             # Build filepath with session-specific folder
             session_upload_folder = os.path.join(UPLOAD_FOLDER, session_id)
             filepath = os.path.join(session_upload_folder, filename)
@@ -1181,9 +1151,6 @@ def worker():
                 continue
 
             process_single_track(filepath, filename, session_id)
-            
-            # Mark as done in history
-            save_to_history(filename)
             
             track_queue.task_done()
             
@@ -1662,14 +1629,7 @@ def cleanup_files():
         with track_queue.mutex:
             track_queue.queue.clear()
             
-        # Clear History file
-        if os.path.exists(HISTORY_FILE):
-            os.remove(HISTORY_FILE)
-        
-        # Reset in-memory history
-        processed_history = []
-            
-        print("🧹 FULL RESET: All files, results, and history cleared")
+        print("🧹 FULL RESET: All files and results cleared")
         return jsonify({'message': 'Cleanup successful', 'results_cleared': True})
         
     except Exception as e:
