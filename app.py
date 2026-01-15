@@ -52,42 +52,55 @@ def track_file_for_cleanup(track_name, original_path, num_files=6):
         download_tracker[track_name] = {
             'files_total': num_files,
             'downloaded': 0,
+            'downloaded_files': set(),  # Track which specific files were downloaded
             'original_path': original_path,
             'processed_dir': os.path.join(PROCESSED_FOLDER, track_name),
             'htdemucs_dir': htdemucs_dir
         }
-        print(f"📝 Tracking '{track_name}' for auto-cleanup ({num_files} files)")
-        print(f"   📋 All tracked: {list(download_tracker.keys())}")
+        print(f"")
+        print(f"📝 ════════════════════════════════════════════════")
+        print(f"📝 TRACKER: Registered '{track_name}'")
+        print(f"📝 Files to track: {num_files}")
+        print(f"📝 Original: {original_path}")
+        print(f"📝 Processed dir: {PROCESSED_FOLDER}/{track_name}")
+        print(f"📝 All tracked tracks: {list(download_tracker.keys())}")
+        print(f"📝 ════════════════════════════════════════════════")
 
 def mark_file_downloaded(track_name, filepath):
-    """Mark a file as downloaded and cleanup if all files done."""
+    """Mark a file as downloaded. Delete ALL files only when ALL are downloaded."""
     with download_tracker_lock:
         if track_name not in download_tracker:
-            print(f"⚠️ Track '{track_name}' not in tracker. Available: {list(download_tracker.keys())}")
-            # Still try to delete the file even if not in tracker (API already downloaded)
-            try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                    print(f"🗑️ Deleted (untracked): {os.path.basename(filepath)}")
-            except Exception as e:
-                print(f"⚠️ Could not delete untracked file {filepath}: {e}")
+            print(f"⚠️ Track '{track_name}' not in tracker - skipping deletion")
             return
         
         tracker = download_tracker[track_name]
-        tracker['downloaded'] += 1
         
-        print(f"📥 Downloaded {tracker['downloaded']}/{tracker['files_total']} for {track_name}")
+        # Track which files have been downloaded (don't count duplicates)
+        if 'downloaded_files' not in tracker:
+            tracker['downloaded_files'] = set()
         
-        # Delete the individual file after download
-        try:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-                print(f"🗑️ Deleted: {os.path.basename(filepath)}")
-        except Exception as e:
-            print(f"⚠️ Could not delete {filepath}: {e}")
+        file_basename = os.path.basename(filepath)
+        if file_basename in tracker['downloaded_files']:
+            print(f"   ℹ️ File already marked as downloaded: {file_basename}")
+            return
         
-        # If all files downloaded, cleanup original and folder
+        tracker['downloaded_files'].add(file_basename)
+        tracker['downloaded'] = len(tracker['downloaded_files'])
+        
+        print(f"📥 Downloaded {tracker['downloaded']}/{tracker['files_total']} for {track_name}: {file_basename}")
+        
+        # Only cleanup when ALL files have been downloaded
         if tracker['downloaded'] >= tracker['files_total']:
+            print(f"🎉 All {tracker['files_total']} files downloaded for {track_name}! Starting cleanup...")
+            
+            # Delete all processed files
+            if tracker['processed_dir'] and os.path.exists(tracker['processed_dir']):
+                try:
+                    shutil.rmtree(tracker['processed_dir'])
+                    print(f"🗑️ Deleted processed folder: {tracker['processed_dir']}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete processed folder: {e}")
+            
             # Delete original upload file
             if tracker['original_path'] and os.path.exists(tracker['original_path']):
                 try:
@@ -103,15 +116,6 @@ def mark_file_downloaded(track_name, filepath):
                     print(f"🗑️ Deleted htdemucs folder: {tracker['htdemucs_dir']}")
                 except Exception as e:
                     print(f"⚠️ Could not delete htdemucs folder: {e}")
-            
-            # Delete processed folder if empty
-            if tracker['processed_dir'] and os.path.exists(tracker['processed_dir']):
-                try:
-                    if not os.listdir(tracker['processed_dir']):
-                        os.rmdir(tracker['processed_dir'])
-                        print(f"🗑️ Deleted folder: {tracker['processed_dir']}")
-                except Exception as e:
-                    print(f"⚠️ Could not delete folder: {e}")
             
             # Remove from tracker
             del download_tracker[track_name]
@@ -1689,14 +1693,17 @@ def download_file():
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
     
-    # AUTO-DELETION DISABLED - Files stay until manual cleanup
-    # This prevents 404 errors when multiple downloads happen simultaneously
-    # if track_name:
-    #     print(f"   🔍 Attempting cleanup for track: '{track_name}'")
-    #     print(f"   🔍 Current tracker keys: {list(download_tracker.keys())}")
-    #     mark_file_downloaded(track_name, filepath)
-    # else:
-    #     print(f"   ⚠️ No track_name extracted from path!")
+    # Smart deletion: only delete AFTER all files for this track are downloaded
+    # The file has already been read into memory, so deletion won't affect the response
+    if track_name:
+        print(f"   🔍 Checking cleanup for track: '{track_name}'")
+        print(f"   🔍 Tracker keys: {list(download_tracker.keys())}")
+        
+        # Only mark as downloaded if track is in tracker (meaning not yet fully downloaded)
+        if track_name in download_tracker:
+            mark_file_downloaded(track_name, filepath)
+        else:
+            print(f"   ℹ️ Track not in tracker - file stays (already cleaned or first download)")
     
     return response
 
