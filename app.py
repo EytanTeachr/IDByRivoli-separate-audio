@@ -524,15 +524,18 @@ def send_track_info_to_api(track_data):
         return
     
     try:
+        import json
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {API_KEY}'
         }
         
-        # Log the URL being sent
-        print(f"📤 API: {track_data['Titre']} ({track_data['Format']})")
-        print(f"   📁 Fichier: {track_data.get('Fichiers', 'N/A')}")
-        print(f"   🖼️ Cover: {track_data.get('Url', 'N/A')}")
+        # Log the full payload being sent
+        print(f"\n{'='*60}")
+        print(f"📤 API PAYLOAD for: {track_data.get('Titre', 'N/A')} ({track_data.get('Format', 'N/A')})")
+        print(f"{'='*60}")
+        print(json.dumps(track_data, indent=2, ensure_ascii=False))
+        print(f"{'='*60}\n")
         
         response = requests.post(API_ENDPOINT, json=track_data, headers=headers, timeout=30)
         
