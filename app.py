@@ -9,7 +9,7 @@ import io
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file, session
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX, TXXX
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, WOAR, WXXX, TXXX
 from pydub import AudioSegment
 import librosa
 import numpy as np
@@ -435,13 +435,18 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher/Label (map sub-labels to parent labels)
+        # 9. Publisher/Label (map sub-labels to parent labels, leave empty if none)
         if original_tags and 'TPUB' in original_tags:
             original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
             if original_label:
                 # Map sub-label to parent label if applicable
                 mapped_label = get_parent_label(original_label)
                 tags.add(TPUB(encoding=3, text=mapped_label))
+                print(f"   📋 Publisher: '{original_label}' → '{mapped_label}'")
+            else:
+                print(f"   📋 Publisher: (vide dans l'original)")
+        else:
+            print(f"   📋 Publisher: (pas de TPUB dans l'original)")
         
         # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
@@ -477,9 +482,7 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         
         # NOTE: Original cover is NOT added to file - only sent to API via prepare_track_metadata
         
-        # Additional fields for ID By Rivoli branding (optional, can be removed if not desired)
-        tags.add(TMED(encoding=3, text='ID By Rivoli'))
-        # Comment field left empty as requested
+        # URL branding only (no TMED to avoid confusion with Publisher in some players)
         tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         # Save both ID3v2.3 and ID3v1.1 tags together (preserves all tags including covers)
@@ -577,9 +580,7 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         
         # NOTE: Original cover is NOT added to file - only sent to API via prepare_track_metadata
         
-        # 12. Additional branding fields
-        audio.tags.add(TMED(encoding=3, text='ID By Rivoli'))
-        # Comment field left empty as requested
+        # URL branding only (no TMED to avoid confusion with Publisher in some players)
         audio.tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         # Save properly embedded in WAV structure
