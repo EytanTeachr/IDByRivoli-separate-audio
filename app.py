@@ -4,6 +4,8 @@ import threading
 import shutil
 import time
 import re
+import zipfile
+import io
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file, session
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
@@ -36,6 +38,75 @@ from threading import Lock
 # Dictionary to store job status per session
 sessions_status = {}
 sessions_lock = Lock()
+
+# Track downloads for auto-cleanup
+# Structure: { "Track Name": {"files_to_download": 6, "downloaded": 0, "original_path": "/path/to/original.mp3"} }
+download_tracker = {}
+download_tracker_lock = Lock()
+
+def track_file_for_cleanup(track_name, original_path, num_files=6):
+    """Register a track for cleanup after all files are downloaded."""
+    with download_tracker_lock:
+        # Also track the htdemucs intermediate folder
+        htdemucs_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)
+        download_tracker[track_name] = {
+            'files_total': num_files,
+            'downloaded': 0,
+            'original_path': original_path,
+            'processed_dir': os.path.join(PROCESSED_FOLDER, track_name),
+            'htdemucs_dir': htdemucs_dir
+        }
+        print(f"📝 Tracking {track_name} for auto-cleanup ({num_files} files)")
+
+def mark_file_downloaded(track_name, filepath):
+    """Mark a file as downloaded and cleanup if all files done."""
+    with download_tracker_lock:
+        if track_name not in download_tracker:
+            return
+        
+        tracker = download_tracker[track_name]
+        tracker['downloaded'] += 1
+        
+        print(f"📥 Downloaded {tracker['downloaded']}/{tracker['files_total']} for {track_name}")
+        
+        # Delete the individual file after download
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                print(f"🗑️ Deleted: {os.path.basename(filepath)}")
+        except Exception as e:
+            print(f"⚠️ Could not delete {filepath}: {e}")
+        
+        # If all files downloaded, cleanup original and folder
+        if tracker['downloaded'] >= tracker['files_total']:
+            # Delete original upload file
+            if tracker['original_path'] and os.path.exists(tracker['original_path']):
+                try:
+                    os.remove(tracker['original_path'])
+                    print(f"🗑️ Deleted original: {tracker['original_path']}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete original: {e}")
+            
+            # Delete htdemucs intermediate folder
+            if tracker.get('htdemucs_dir') and os.path.exists(tracker['htdemucs_dir']):
+                try:
+                    shutil.rmtree(tracker['htdemucs_dir'])
+                    print(f"🗑️ Deleted htdemucs folder: {tracker['htdemucs_dir']}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete htdemucs folder: {e}")
+            
+            # Delete processed folder if empty
+            if tracker['processed_dir'] and os.path.exists(tracker['processed_dir']):
+                try:
+                    if not os.listdir(tracker['processed_dir']):
+                        os.rmdir(tracker['processed_dir'])
+                        print(f"🗑️ Deleted folder: {tracker['processed_dir']}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete folder: {e}")
+            
+            # Remove from tracker
+            del download_tracker[track_name]
+            print(f"✅ Cleanup complete for {track_name}")
 
 def get_session_id():
     """Get or create a unique session ID for the current user."""
@@ -84,10 +155,6 @@ def log_message(message, session_id=None):
     job_status['logs'].append(f"[{timestamp}] {message}")
     if len(job_status['logs']) > 1000:
         job_status['logs'] = job_status['logs'][-1000:]
-
-import shutil
-import zipfile
-import io
 
 @app.route('/download_all_zip')
 def download_all_zip():
@@ -297,7 +364,21 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
         tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
+        # Save ID3v2.3 tags
         tags.save(filepath, v2_version=3)
+        
+        # Also add ID3v1 tags for compatibility (Tag 1)
+        try:
+            from mutagen.id3 import ID3
+            from mutagen.mp3 import MP3
+            audio = MP3(filepath)
+            # ID3v1 tags (limited fields)
+            if original_tags and 'TPE1' in original_tags:
+                artist_raw = str(original_tags['TPE1'].text[0]) if original_tags['TPE1'].text else ''
+                audio['TPE1'] = TPE1(encoding=3, text=format_artists(artist_raw))
+            audio.save(v1=2, v2_version=3)  # v1=2 means write ID3v1.1
+        except Exception as e:
+            print(f"ID3v1 save warning: {e}")
         
     except Exception as e:
         print(f"Error updating metadata for {filepath}: {e}")
@@ -827,6 +908,12 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         log_message(f"✓ Version Instrumentale créée")
     else:
         log_message(f"⚠️ Pas de fichier instrumental")
+    
+    # Register track for auto-cleanup after downloads
+    # Count actual files: each edit has MP3 + WAV = 2 files per edit
+    num_files = len(edits) * 2
+    clean_name, _ = clean_filename(base_filename)
+    track_file_for_cleanup(clean_name, original_path, num_files)
 
     return edits
 
@@ -1335,6 +1422,7 @@ def download_file():
     """
     Robust download route using query parameter.
     Usage: /download_file?path=SubDir/File.mp3
+    Automatically deletes file after successful download if API confirmed.
     """
     relative_path = request.args.get('path')
     
@@ -1360,6 +1448,9 @@ def download_file():
     print(f"   Looking for: {filepath}")
     print(f"   File exists: {os.path.exists(filepath)}")
     
+    # Extract track name from path (first directory component)
+    track_name = decoded_path.split('/')[0] if '/' in decoded_path else None
+    
     # If not found, try to find a matching file (handle encoding issues)
     if not os.path.exists(filepath):
         # Try to find file with similar name
@@ -1372,6 +1463,7 @@ def download_file():
             for existing_dir in os.listdir(PROCESSED_FOLDER):
                 if existing_dir.lower() == subdir_name.lower() or existing_dir == subdir_name:
                     subdir_path = os.path.join(PROCESSED_FOLDER, existing_dir)
+                    track_name = existing_dir  # Update track name to actual folder name
                     if os.path.isdir(subdir_path):
                         # Look for matching file
                         for existing_file in os.listdir(subdir_path):
@@ -1401,15 +1493,27 @@ def download_file():
     # Get clean filename for download
     download_filename = os.path.basename(filepath)
     
+    # Read file into memory first so we can delete it after
+    with open(filepath, 'rb') as f:
+        file_data = f.read()
+    
+    from io import BytesIO
+    
+    # Create response from memory
     response = send_file(
-        filepath,
+        BytesIO(file_data),
         as_attachment=True,
-        download_name=download_filename
+        download_name=download_filename,
+        mimetype='audio/mpeg' if filepath.endswith('.mp3') else 'audio/wav'
     )
     
     # Add CORS headers for cross-origin downloads
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+    
+    # Mark file as downloaded and trigger cleanup
+    if track_name:
+        mark_file_downloaded(track_name, filepath)
     
     return response
 

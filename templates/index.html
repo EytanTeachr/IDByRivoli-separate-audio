@@ -318,35 +318,20 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="margin:0;">Résultats</h2>
                 
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <a href="/download_all_zip" class="download-btn dl-mp3" style="font-size: 1.1em; padding: 15px 30px; background-color: #fff; color: #000; border: 1px solid #fff;">
                         📦 Tout Télécharger (.ZIP)
                     </a>
-                    
-                    <button onclick="confirmCleanup()" style="font-size: 1.1em; padding: 15px 30px; background-color: #e74c3c; color: #fff; border: 1px solid #c0392b; width: auto; margin: 0;">
-                        🧹 Tout est fini, libérer l'espace
-                    </button>
+                    <span style="color: #888; font-size: 0.9em;">
+                        ✨ Nettoyage automatique après téléchargement API
+                    </span>
                 </div>
             </div>
             <div id="resultsList"></div>
         </div>
 
     <script>
-        function confirmCleanup() {
-            if (confirm("ATTENTION : Cela va supprimer TOUS les fichiers (uploads, résultats, logs) du serveur pour libérer de l'espace.\n\nÊtes-vous sûr d'avoir tout récupéré ?")) {
-                fetch('/cleanup', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert("Espace libéré avec succès !");
-                        location.reload(); // Reload page to reset UI
-                    } else {
-                        alert("Erreur lors du nettoyage : " + data.error);
-                    }
-                })
-                .catch(err => alert("Erreur réseau : " + err));
-            }
-        }
+        // Auto-cleanup is now handled server-side after API downloads
     
         let selectedFiles = [];
 
