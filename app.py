@@ -726,6 +726,20 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     if original_tags and 'TIT2' in original_tags:
         original_title = str(original_tags['TIT2'].text[0]) if original_tags['TIT2'].text else None
     
+    # Determine the base name for output files and folders (from metadata title)
+    fallback_name, _ = clean_filename(base_filename)
+    if original_title:
+        # Clean the metadata title for use in filename (remove invalid chars)
+        metadata_base_name = original_title
+        metadata_base_name = re.sub(r'[<>:"/\\|?*]', '', metadata_base_name)
+        metadata_base_name = metadata_base_name.strip()
+    else:
+        metadata_base_name = fallback_name
+    
+    # Create correct output directory using metadata title
+    correct_output_path = os.path.join(PROCESSED_FOLDER, metadata_base_name)
+    os.makedirs(correct_output_path, exist_ok=True)
+    
     # Genres that should NOT get edits (just original MP3/WAV)
     # simple_genres = ['house', 'electro house', 'dance']
     
@@ -734,19 +748,18 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     def export_edit(audio_segment, suffix):
         from concurrent.futures import ThreadPoolExecutor
         
-        clean_name, _ = clean_filename(base_filename)
+        # Use metadata_base_name computed above
+        base_name = metadata_base_name
         
-        # Use original title from metadata if available, else clean filename
-        base_title = original_title if original_title else clean_name
+        out_name_mp3 = f"{base_name} - {suffix}.mp3"
+        out_name_wav = f"{base_name} - {suffix}.wav"
         
-        out_name_mp3 = f"{clean_name} - {suffix}.mp3"
-        out_name_wav = f"{clean_name} - {suffix}.wav"
+        # Use correct_output_path (based on metadata title)
+        out_path_mp3 = os.path.join(correct_output_path, out_name_mp3)
+        out_path_wav = os.path.join(correct_output_path, out_name_wav)
         
-        out_path_mp3 = os.path.join(base_output_path, out_name_mp3)
-        out_path_wav = os.path.join(base_output_path, out_name_wav)
-        
-        # Metadata title uses original metadata title + suffix
-        metadata_title = f"{base_title} - {suffix}"
+        # Metadata title uses the same base name + suffix
+        metadata_title = f"{base_name} - {suffix}"
         
         # Parallel export of MP3 and WAV for speed
         def export_mp3():
@@ -762,7 +775,8 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             executor.submit(export_wav)
             executor.shutdown(wait=True)
         
-        subdir = clean_name
+        # Use base_name (from metadata) for subdirectory and URLs
+        subdir = base_name
         
         # New robust URL format using query parameter
         # Path relative to PROCESSED_FOLDER: "Subdir/Filename.mp3"
@@ -779,7 +793,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         
         print(f"\n{'='*60}")
         print(f"📁 FILE GENERATION CHECK:")
-        print(f"   Subdir (clean_name): '{subdir}'")
+        print(f"   Subdir (base_name): '{subdir}'")
         print(f"   MP3 filename: '{out_name_mp3}'")
         print(f"   WAV filename: '{out_name_wav}'")
         print(f"   ")
@@ -806,7 +820,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         track_info_mp3 = {
             'type': suffix,
             'format': 'MP3',
-            'name': f"{clean_name} - {suffix}",
+            'name': f"{base_name} - {suffix}",
             'url': mp3_url
         }
         track_data_mp3 = prepare_track_metadata(track_info_mp3, original_path, bpm)
@@ -817,7 +831,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         track_info_wav = {
             'type': suffix,
             'format': 'WAV',
-            'name': f"{clean_name} - {suffix}",
+            'name': f"{base_name} - {suffix}",
             'url': wav_url
         }
         track_data_wav = prepare_track_metadata(track_info_wav, original_path, bpm)
@@ -890,8 +904,7 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
     # Register track for auto-cleanup after downloads
     # Count actual files: each edit has MP3 + WAV = 2 files per edit
     num_files = len(edits) * 2
-    clean_name, _ = clean_filename(base_filename)
-    track_file_for_cleanup(clean_name, original_path, num_files)
+    track_file_for_cleanup(metadata_base_name, original_path, num_files)
 
     return edits
 
