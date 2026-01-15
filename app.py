@@ -62,6 +62,14 @@ def mark_file_downloaded(track_name, filepath):
     """Mark a file as downloaded and cleanup if all files done."""
     with download_tracker_lock:
         if track_name not in download_tracker:
+            print(f"⚠️ Track '{track_name}' not in tracker. Available: {list(download_tracker.keys())}")
+            # Still try to delete the file even if not in tracker (API already downloaded)
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    print(f"🗑️ Deleted (untracked): {os.path.basename(filepath)}")
+            except Exception as e:
+                print(f"⚠️ Could not delete untracked file {filepath}: {e}")
             return
         
         tracker = download_tracker[track_name]
@@ -330,7 +338,7 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         except:
             pass
         
-        # 11. Picture - ID By Rivoli Cover as PRIMARY (type=3)
+        # 11. Picture - ID By Rivoli Cover ONLY (no original cover in file)
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
         if os.path.exists(cover_path):
             with open(cover_path, 'rb') as img:
@@ -342,22 +350,7 @@ def update_metadata(filepath, artist, title, original_path, bpm):
                     data=img.read()
                 ))
         
-        # 12. Picture - Original cover as SECONDARY (type=0)
-        if original_tags:
-            for apic_key in original_tags.keys():
-                if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
-                    try:
-                        original_apic = original_tags[apic_key]
-                        tags.add(APIC(
-                            encoding=3,
-                            mime=original_apic.mime,
-                            type=0,  # Other - SECONDARY
-                            desc='Original',
-                            data=original_apic.data
-                        ))
-                        break
-                    except:
-                        pass
+        # NOTE: Original cover is NOT added to file - only sent to API via prepare_track_metadata
         
         # Additional fields for ID By Rivoli branding (optional, can be removed if not desired)
         tags.add(TMED(encoding=3, text='ID By Rivoli'))
@@ -452,24 +445,9 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
                     data=img.read()
                 ))
         
-        # 12. Picture - Original cover as SECONDARY (type=0)
-        if original_tags:
-            for apic_key in original_tags.keys():
-                if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
-                    try:
-                        original_apic = original_tags[apic_key]
-                        audio.tags.add(APIC(
-                            encoding=3,
-                            mime=original_apic.mime,
-                            type=0,  # Other - SECONDARY
-                            desc='Original',
-                            data=original_apic.data
-                        ))
-                        break
-                    except:
-                        pass
+        # NOTE: Original cover is NOT added to file - only sent to API via prepare_track_metadata
         
-        # 13. Additional branding fields
+        # 12. Additional branding fields
         audio.tags.add(TMED(encoding=3, text='ID By Rivoli'))
         audio.tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
         audio.tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
@@ -740,7 +718,13 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         original_tags = original_audio.tags
         genre = str(original_tags.get('TCON', '')).lower() if original_tags and 'TCON' in original_tags else ''
     except:
+        original_tags = None
         genre = ''
+    
+    # Get original title from metadata (fallback to filename if not available)
+    original_title = None
+    if original_tags and 'TIT2' in original_tags:
+        original_title = str(original_tags['TIT2'].text[0]) if original_tags['TIT2'].text else None
     
     # Genres that should NOT get edits (just original MP3/WAV)
     # simple_genres = ['house', 'electro house', 'dance']
@@ -751,20 +735,27 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
         from concurrent.futures import ThreadPoolExecutor
         
         clean_name, _ = clean_filename(base_filename)
+        
+        # Use original title from metadata if available, else clean filename
+        base_title = original_title if original_title else clean_name
+        
         out_name_mp3 = f"{clean_name} - {suffix}.mp3"
         out_name_wav = f"{clean_name} - {suffix}.wav"
         
         out_path_mp3 = os.path.join(base_output_path, out_name_mp3)
         out_path_wav = os.path.join(base_output_path, out_name_wav)
         
+        # Metadata title uses original metadata title + suffix
+        metadata_title = f"{base_title} - {suffix}"
+        
         # Parallel export of MP3 and WAV for speed
         def export_mp3():
             audio_segment.export(out_path_mp3, format="mp3", bitrate="320k")
-            update_metadata(out_path_mp3, "ID By Rivoli", f"{clean_name} - {suffix}", original_path, bpm)
+            update_metadata(out_path_mp3, "ID By Rivoli", metadata_title, original_path, bpm)
         
         def export_wav():
             audio_segment.export(out_path_wav, format="wav")
-            update_metadata_wav(out_path_wav, "ID By Rivoli", f"{clean_name} - {suffix}", original_path, bpm)
+            update_metadata_wav(out_path_wav, "ID By Rivoli", metadata_title, original_path, bpm)
         
         with ThreadPoolExecutor(max_workers=2) as executor:
             executor.submit(export_mp3)
