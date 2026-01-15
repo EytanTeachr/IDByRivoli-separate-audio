@@ -1689,13 +1689,14 @@ def download_file():
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
     
-    # Mark file as downloaded and trigger cleanup
-    if track_name:
-        print(f"   🔍 Attempting cleanup for track: '{track_name}'")
-        print(f"   🔍 Current tracker keys: {list(download_tracker.keys())}")
-        mark_file_downloaded(track_name, filepath)
-    else:
-        print(f"   ⚠️ No track_name extracted from path!")
+    # AUTO-DELETION DISABLED - Files stay until manual cleanup
+    # This prevents 404 errors when multiple downloads happen simultaneously
+    # if track_name:
+    #     print(f"   🔍 Attempting cleanup for track: '{track_name}'")
+    #     print(f"   🔍 Current tracker keys: {list(download_tracker.keys())}")
+    #     mark_file_downloaded(track_name, filepath)
+    # else:
+    #     print(f"   ⚠️ No track_name extracted from path!")
     
     return response
 
