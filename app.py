@@ -224,15 +224,25 @@ def format_artists(artist_string):
     """
     Formats multiple artists with proper separators.
     - 2 artists: "Artist A & Artist B"
-    - 3+ artists: "Artist A, Artist B & Artist C"
+    - 3+ artists: "Artist A, Artist B, Artist C & Artist D"
     
     Handles various input separators: /, ;, feat., ft., and, &
+    Ensures proper ASCII output (no unicode escapes like \u0026)
     """
     if not artist_string:
         return artist_string
     
+    # Convert to string and decode any unicode escapes
+    normalized = str(artist_string)
+    
+    # Decode unicode escapes if present (e.g., \u0026 -> &)
+    try:
+        if '\\u' in normalized:
+            normalized = normalized.encode().decode('unicode_escape')
+    except:
+        pass
+    
     # Normalize separators - replace common separators with a standard one
-    normalized = artist_string
     # Replace "feat.", "ft.", "Feat.", "Ft." with separator
     normalized = re.sub(r'\s*(?:feat\.?|ft\.?|Feat\.?|Ft\.?)\s*', '|||', normalized, flags=re.IGNORECASE)
     # Replace " / ", "/", " & ", " and ", ";" with separator
@@ -315,8 +325,11 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher
-        tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        # 9. Publisher/Label (keep original if exists, otherwise leave empty)
+        if original_tags and 'TPUB' in original_tags:
+            original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+            if original_label:
+                tags.add(TPUB(encoding=3, text=original_label))
         
         # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
@@ -421,8 +434,11 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             audio.tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher
-        audio.tags.add(TPUB(encoding=3, text='ID By Rivoli'))
+        # 9. Publisher/Label (keep original if exists, otherwise leave empty)
+        if original_tags and 'TPUB' in original_tags:
+            original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+            if original_label:
+                audio.tags.add(TPUB(encoding=3, text=original_label))
         
         # 10. Custom Track ID
         filename_base = os.path.splitext(os.path.basename(filepath))[0]
@@ -592,8 +608,10 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         except:
             date_sortie = 0
         
-        # Publisher/Label
-        label = str(original_tags.get('TPUB', 'ID By Rivoli')).strip() if 'TPUB' in original_tags else 'ID By Rivoli'
+        # Publisher/Label (keep original if exists, otherwise empty)
+        label = ''
+        if 'TPUB' in original_tags and original_tags['TPUB'].text:
+            label = str(original_tags['TPUB'].text[0]).strip()
         
         # Construct ABSOLUTE URLs using DYNAMIC BASE URL
         relative_url = edit_info.get('url', '')
