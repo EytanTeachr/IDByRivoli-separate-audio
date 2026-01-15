@@ -56,7 +56,8 @@ def track_file_for_cleanup(track_name, original_path, num_files=6):
             'processed_dir': os.path.join(PROCESSED_FOLDER, track_name),
             'htdemucs_dir': htdemucs_dir
         }
-        print(f"📝 Tracking {track_name} for auto-cleanup ({num_files} files)")
+        print(f"📝 Tracking '{track_name}' for auto-cleanup ({num_files} files)")
+        print(f"   📋 All tracked: {list(download_tracker.keys())}")
 
 def mark_file_downloaded(track_name, filepath):
     """Mark a file as downloaded and cleanup if all files done."""
@@ -1529,7 +1530,11 @@ def download_file():
     
     # Mark file as downloaded and trigger cleanup
     if track_name:
+        print(f"   🔍 Attempting cleanup for track: '{track_name}'")
+        print(f"   🔍 Current tracker keys: {list(download_tracker.keys())}")
         mark_file_downloaded(track_name, filepath)
+    else:
+        print(f"   ⚠️ No track_name extracted from path!")
     
     return response
 
