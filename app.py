@@ -242,6 +242,9 @@ def format_artists(artist_string):
     except:
         pass
     
+    # Replace null character \u0000 (common ID3 multi-value separator) with our separator
+    normalized = normalized.replace('\x00', '|||')
+    
     # Normalize separators - replace common separators with a standard one
     # Replace "feat.", "ft.", "Feat.", "Ft." with separator
     normalized = re.sub(r'\s*(?:feat\.?|ft\.?|Feat\.?|Ft\.?)\s*', '|||', normalized, flags=re.IGNORECASE)
