@@ -9,7 +9,7 @@ import io
 from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file, session
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX, TXXX
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX, TXXX
 from pydub import AudioSegment
 import librosa
 import numpy as np
@@ -269,6 +269,111 @@ def format_artists(artist_string):
         # 3 or more: "A, B, C & D"
         return ', '.join(artists[:-1]) + ' & ' + artists[-1]
 
+# Label mapping: sub-labels to parent labels
+LABEL_MAPPINGS = {
+    'Universal Music Group': [
+        'PolyGram Music Publishing',
+        'Rondor Music',
+        'Edition Ricordi',
+        'Decca Publishing',
+        'Universal Music Publishing Classical',
+        'Universal Music Publishing Production Music',
+        'Universal Music Publishing France',
+        'Universal Music Publishing UK',
+        'Universal Music Publishing US',
+        'Universal Music Publishing Germany',
+        'Universal Music Publishing Benelux',
+        'Universal Music Publishing Scandinavia',
+        'Universal Music Publishing Latin America',
+        'Universal Music Publishing Asia',
+        'Eagle-i Music',
+        'Global Dog Publishing',
+        'Casablanca Media Publishing',
+        'Criterion Music Corp',
+        'Beechwood Music Corp',
+        'Universal Songs of PolyGram International',
+        'Abbey Road Masters',
+        'Island Music Publishing',
+        'Motown Music Publishing',
+        'Def Jam Music Publishing',
+        'Capitol Music Publishing',
+    ],
+    'Sony Music Group': [
+        'EMI Music Publishing',
+        'ATV Music Publishing',
+        'Famous Music',
+        'Jobete Music',
+        'Sony/ATV Latin',
+        'Sony/ATV Europe',
+        'Sony/ATV Scandinavia',
+        'Sony/ATV France',
+        'Sony/ATV Germany',
+        'Sony/ATV UK',
+        'Sony/ATV US',
+        'Sony Music Publishing Production Music',
+        'Extreme Music',
+        'Tree Publishing',
+        'Firstcom Music',
+        'Filmtrax',
+        'EMI Production Music',
+        'Motown Catalog Publishing',
+        'Chrysalis Songs',
+    ],
+    'Warner Music Group': [
+        'Chappell & Co',
+        'Warner Chappell Production Music',
+        'Blue Mountain Music',
+        'CPP',
+        'Copyright Protection Provider',
+        'Warner Chappell France',
+        'Warner Chappell UK',
+        'Warner Chappell US',
+        'Warner Chappell Germany',
+        'Warner Chappell Benelux',
+        'Warner Chappell Scandinavia',
+        'Warner Chappell Latin America',
+        'Warner Chappell Asia',
+    ],
+    'Alfred Music Publishing': [
+        'Faber Music',
+        'Imagem Music Group',
+        'Boosey & Hawkes',
+        'Birch Tree Music',
+        'Non-Stop Music',
+        'Music Sales Group',
+    ],
+}
+
+def get_parent_label(sub_label):
+    """
+    Maps a sub-label to its parent label.
+    Returns the parent label if matched, otherwise returns the original sub-label.
+    Case-insensitive matching with flexibility for partial matches.
+    """
+    if not sub_label:
+        return ''
+    
+    sub_label_clean = sub_label.strip()
+    sub_label_lower = sub_label_clean.lower()
+    
+    for parent_label, sub_labels in LABEL_MAPPINGS.items():
+        for known_sub in sub_labels:
+            known_sub_lower = known_sub.lower()
+            # Exact match (case-insensitive)
+            if sub_label_lower == known_sub_lower:
+                return parent_label
+            # Partial match: sub_label contains known_sub or vice versa
+            # Be careful to avoid false positives - require substantial match
+            if len(known_sub_lower) >= 5:  # Only for longer names to avoid false positives
+                if known_sub_lower in sub_label_lower or sub_label_lower in known_sub_lower:
+                    # Additional check: at least 70% of characters match
+                    shorter = min(len(known_sub_lower), len(sub_label_lower))
+                    if shorter >= 5:
+                        return parent_label
+    
+    # No match found, return original
+    return sub_label_clean
+
 def update_metadata(filepath, artist, title, original_path, bpm):
     """
     Updates metadata with ONLY the specified fields (clean slate).
@@ -330,11 +435,13 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher/Label (keep original if exists, otherwise leave empty)
+        # 9. Publisher/Label (map sub-labels to parent labels)
         if original_tags and 'TPUB' in original_tags:
             original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
             if original_label:
-                tags.add(TPUB(encoding=3, text=original_label))
+                # Map sub-label to parent label if applicable
+                mapped_label = get_parent_label(original_label)
+                tags.add(TPUB(encoding=3, text=mapped_label))
         
         # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
@@ -372,7 +479,7 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         
         # Additional fields for ID By Rivoli branding (optional, can be removed if not desired)
         tags.add(TMED(encoding=3, text='ID By Rivoli'))
-        tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
+        # Comment field left empty as requested
         tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         # Save both ID3v2.3 and ID3v1.1 tags together (preserves all tags including covers)
@@ -439,11 +546,13 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             audio.tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher/Label (keep original if exists, otherwise leave empty)
+        # 9. Publisher/Label (map sub-labels to parent labels)
         if original_tags and 'TPUB' in original_tags:
             original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
             if original_label:
-                audio.tags.add(TPUB(encoding=3, text=original_label))
+                # Map sub-label to parent label if applicable
+                mapped_label = get_parent_label(original_label)
+                audio.tags.add(TPUB(encoding=3, text=mapped_label))
         
         # 10. Custom Track ID
         filename_base = os.path.splitext(os.path.basename(filepath))[0]
@@ -470,7 +579,7 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         
         # 12. Additional branding fields
         audio.tags.add(TMED(encoding=3, text='ID By Rivoli'))
-        audio.tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
+        # Comment field left empty as requested
         audio.tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
         # Save properly embedded in WAV structure
@@ -613,10 +722,12 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         except:
             date_sortie = 0
         
-        # Publisher/Label (keep original if exists, otherwise empty)
-        label = ''
+        # Publisher/Label (map sub-labels to parent labels)
+        original_label = ''
         if 'TPUB' in original_tags and original_tags['TPUB'].text:
-            label = str(original_tags['TPUB'].text[0]).strip()
+            original_label = str(original_tags['TPUB'].text[0]).strip()
+        # Apply label mapping
+        label = get_parent_label(original_label) if original_label else ''
         
         # Construct ABSOLUTE URLs using DYNAMIC BASE URL
         relative_url = edit_info.get('url', '')
