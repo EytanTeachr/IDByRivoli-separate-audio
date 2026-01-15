@@ -440,8 +440,11 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         if original_tags and 'TPUB' in original_tags:
             original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
         
+        print(f"   🔍 DEBUG: original_path = {original_path}")
+        print(f"   🔍 DEBUG: TPUB lu du fichier original = '{original_publisher}'")
+        
         if original_publisher:
-            # Keep original publisher in TPUB
+            # Keep original publisher in TPUB (unchanged!)
             tags.add(TPUB(encoding=3, text=original_publisher))
             
             # Get parent label (Warner/Sony/Universal)
@@ -449,11 +452,13 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             # Only add Label if it's different from publisher (meaning it was mapped)
             if parent_label != original_publisher:
                 tags.add(TXXX(encoding=3, desc='LABEL', text=parent_label))
-                print(f"   📋 Publisher: '{original_publisher}' | Label: '{parent_label}'")
+                print(f"   📋 Publisher (TPUB): '{original_publisher}'")
+                print(f"   📋 Label (TXXX): '{parent_label}'")
             else:
-                print(f"   📋 Publisher: '{original_publisher}' | Label: (non reconnu)")
+                print(f"   📋 Publisher (TPUB): '{original_publisher}'")
+                print(f"   📋 Label: (non reconnu, pas ajouté)")
         else:
-            print(f"   📋 Publisher: (vide)")
+            print(f"   📋 Publisher: (vide dans le fichier original)")
         
         # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
