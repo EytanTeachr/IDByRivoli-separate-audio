@@ -364,21 +364,8 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
         tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
         
-        # Save ID3v2.3 tags
-        tags.save(filepath, v2_version=3)
-        
-        # Also add ID3v1 tags for compatibility (Tag 1)
-        try:
-            from mutagen.id3 import ID3
-            from mutagen.mp3 import MP3
-            audio = MP3(filepath)
-            # ID3v1 tags (limited fields)
-            if original_tags and 'TPE1' in original_tags:
-                artist_raw = str(original_tags['TPE1'].text[0]) if original_tags['TPE1'].text else ''
-                audio['TPE1'] = TPE1(encoding=3, text=format_artists(artist_raw))
-            audio.save(v1=2, v2_version=3)  # v1=2 means write ID3v1.1
-        except Exception as e:
-            print(f"ID3v1 save warning: {e}")
+        # Save both ID3v2.3 and ID3v1.1 tags together (preserves all tags including covers)
+        tags.save(filepath, v1=2, v2_version=3)  # v1=2 writes ID3v1.1, v2_version=3 writes ID3v2.3
         
     except Exception as e:
         print(f"Error updating metadata for {filepath}: {e}")
