@@ -271,6 +271,7 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
     """
     Adds ID3v2 tags to WAV file using mutagen.wave (proper method).
     This embeds ID3 tags correctly without corrupting the WAV structure.
+    Same fields as MP3 for consistency.
     """
     try:
         from mutagen.wave import WAVE
@@ -289,19 +290,54 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         if audio.tags is None:
             audio.add_tags()
         
-        # Add core fields
+        # 1. Title (from parameter)
         audio.tags.add(TIT2(encoding=3, text=title))
         
+        # 2. Artist (from original, formatted with , and &)
         if original_tags and 'TPE1' in original_tags:
             artist_raw = str(original_tags['TPE1'].text[0]) if original_tags['TPE1'].text else ''
             artist_formatted = format_artists(artist_raw)
             audio.tags.add(TPE1(encoding=3, text=artist_formatted))
         
+        # 3. Album (from original)
+        if original_tags and 'TALB' in original_tags:
+            audio.tags.add(TALB(encoding=3, text=original_tags['TALB'].text))
+        
+        # 4. Date (from original)
+        if original_tags and 'TDRC' in original_tags:
+            audio.tags.add(TDRC(encoding=3, text=original_tags['TDRC'].text))
+        
+        # 5. Track Number (from original)
+        if original_tags and 'TRCK' in original_tags:
+            audio.tags.add(TRCK(encoding=3, text=original_tags['TRCK'].text))
+        
+        # 6. Genre (from original)
+        if original_tags and 'TCON' in original_tags:
+            audio.tags.add(TCON(encoding=3, text=original_tags['TCON'].text))
+        
+        # 7. BPM (from original metadata only)
         if bpm is not None:
             audio.tags.add(TBPM(encoding=3, text=str(bpm)))
+        
+        # 8. ISRC (from original)
+        isrc_value = ''
+        if original_tags and 'TSRC' in original_tags:
+            isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
+            audio.tags.add(TSRC(encoding=3, text=isrc_value))
+        
+        # 9. Publisher
         audio.tags.add(TPUB(encoding=3, text='ID By Rivoli'))
         
-        # Add ID By Rivoli Cover as PRIMARY (type=3)
+        # 10. Custom Track ID
+        filename_base = os.path.splitext(os.path.basename(filepath))[0]
+        filename_clean = filename_base.replace('-', ' ').replace('_', ' ')
+        filename_clean = re.sub(r'\s+', ' ', filename_clean).strip()
+        filename_clean = filename_clean.replace(' ', '_')
+        filename_clean = re.sub(r'_+', '_', filename_clean)
+        track_id = f"{isrc_value}_{filename_clean}" if isrc_value else filename_clean
+        audio.tags.add(TXXX(encoding=3, desc='TRACK_ID', text=track_id))
+        
+        # 11. Picture - ID By Rivoli Cover as PRIMARY (type=3)
         cover_path = os.path.join(BASE_DIR, 'assets', 'Cover_Id_by_Rivoli.jpeg')
         if os.path.exists(cover_path):
             with open(cover_path, 'rb') as img:
@@ -313,7 +349,7 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
                     data=img.read()
                 ))
         
-        # Add Original cover as SECONDARY (type=0)
+        # 12. Picture - Original cover as SECONDARY (type=0)
         if original_tags:
             for apic_key in original_tags.keys():
                 if apic_key.startswith('APIC') and 'ID By Rivoli' not in str(getattr(original_tags[apic_key], 'desc', '')):
@@ -330,9 +366,14 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
                     except:
                         pass
         
+        # 13. Additional branding fields
+        audio.tags.add(TMED(encoding=3, text='ID By Rivoli'))
+        audio.tags.add(COMM(encoding=3, lang='eng', desc='Description', text='ID By Rivoli - www.idbyrivoli.com'))
+        audio.tags.add(WXXX(encoding=3, desc='ID By Rivoli', url='https://www.idbyrivoli.com'))
+        
         # Save properly embedded in WAV structure
         audio.save()
-        print(f"   ✅ WAV metadata + cover ajoutés: {os.path.basename(filepath)}")
+        print(f"   ✅ WAV metadata complet: {os.path.basename(filepath)}")
         
     except Exception as e:
         print(f"   ⚠️ WAV metadata error: {e}")
