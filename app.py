@@ -4,7 +4,7 @@ import threading
 import shutil
 import time
 import re
-from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file
+from flask import Flask, render_template, request, jsonify, send_from_directory, abort, send_file, session
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, TIT2, TPE1, APIC, COMM, TALB, TDRC, TRCK, TCON, TBPM, TSRC, TLEN, TPUB, TMED, WOAR, WXXX, TXXX
@@ -15,6 +15,7 @@ import scipy.io.wavfile as wavfile
 import urllib.parse
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'idbyrivoli-secret-key-2024')
 
 # Use absolute paths to avoid confusion
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -28,25 +29,59 @@ os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Global variable to track progress
-job_status = {
-    'state': 'idle', 
-    'progress': 0,
-    'total_files': 0,
-    'current_file_idx': 0,
-    'current_filename': '',
-    'current_step': '',
-    'results': [],
-    'error': None,
-    'logs': []  # Added logs list
-}
+# Multi-user session support
+import uuid
+from threading import Lock
 
-def log_message(message):
+# Dictionary to store job status per session
+sessions_status = {}
+sessions_lock = Lock()
+
+def get_session_id():
+    """Get or create a unique session ID for the current user."""
+    from flask import session
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())[:8]
+    return session['session_id']
+
+def get_job_status(session_id=None):
+    """Get job status for a specific session."""
+    if session_id is None:
+        session_id = 'global'
+    
+    with sessions_lock:
+        if session_id not in sessions_status:
+            sessions_status[session_id] = {
+                'state': 'idle', 
+                'progress': 0,
+                'total_files': 0,
+                'current_file_idx': 0,
+                'current_filename': '',
+                'current_step': '',
+                'results': [],
+                'error': None,
+                'logs': [],
+                'session_id': session_id
+            }
+        return sessions_status[session_id]
+
+# Global variable for backward compatibility
+job_status = get_job_status('global')
+
+def log_message(message, session_id=None):
     """Adds a message to the job logs and prints it."""
     print(message)
     timestamp = time.strftime("%H:%M:%S")
+    
+    # Log to specific session if provided
+    if session_id:
+        status = get_job_status(session_id)
+        status['logs'].append(f"[{timestamp}] {message}")
+        if len(status['logs']) > 1000:
+            status['logs'] = status['logs'][-1000:]
+    
+    # Also log to global for backward compatibility
     job_status['logs'].append(f"[{timestamp}] {message}")
-    # Keep only last 1000 logs to prevent memory issues
     if len(job_status['logs']) > 1000:
         job_status['logs'] = job_status['logs'][-1000:]
 
@@ -996,55 +1031,68 @@ track_queue = queue.Queue()
 
 # Worker thread function
 def worker():
-    global job_status
     while True:
         try:
-            filename = track_queue.get()
-            if filename is None:
+            queue_item = track_queue.get()
+            if queue_item is None:
                 break
+            
+            # Handle both old format (string) and new format (dict with session_id)
+            if isinstance(queue_item, dict):
+                filename = queue_item['filename']
+                session_id = queue_item.get('session_id', 'global')
+            else:
+                filename = queue_item
+                session_id = 'global'
+            
+            # Get session-specific status
+            current_status = get_job_status(session_id)
             
             # Check if already processed
             if filename in load_history():
-                log_message(f"⏩ Déjà traité (ignoré) : {filename}")
+                log_message(f"⏩ Déjà traité (ignoré) : {filename}", session_id)
                 track_queue.task_done()
-                # Reset state if queue is empty
                 if track_queue.empty():
-                    job_status['state'] = 'idle'
-                    job_status['current_step'] = ''
-                    job_status['current_filename'] = ''
+                    current_status['state'] = 'idle'
+                    current_status['current_step'] = ''
+                    current_status['current_filename'] = ''
                 continue
             
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            # Build filepath with session-specific folder
+            session_upload_folder = os.path.join(UPLOAD_FOLDER, session_id)
+            filepath = os.path.join(session_upload_folder, filename)
             
-            # Check if file exists (might have been deleted)
+            # Fallback to global folder if not found in session folder
             if not os.path.exists(filepath):
-                 log_message(f"⚠️ Fichier introuvable (ignoré) : {filename}")
-                 track_queue.task_done()
-                 # Reset state if queue is empty
-                 if track_queue.empty():
-                     job_status['state'] = 'idle'
-                     job_status['current_step'] = ''
-                     job_status['current_filename'] = ''
-                 continue
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+            
+            # Check if file exists
+            if not os.path.exists(filepath):
+                log_message(f"⚠️ Fichier introuvable (ignoré) : {filename}", session_id)
+                track_queue.task_done()
+                if track_queue.empty():
+                    current_status['state'] = 'idle'
+                    current_status['current_step'] = ''
+                    current_status['current_filename'] = ''
+                continue
 
-            process_single_track(filepath, filename)
+            process_single_track(filepath, filename, session_id)
             
             # Mark as done in history
             save_to_history(filename)
             
             track_queue.task_done()
             
-            # Reset state to idle if queue is empty (ready for new files)
+            # Reset state to idle if queue is empty
             if track_queue.empty():
-                job_status['state'] = 'idle'
-                job_status['current_step'] = 'Prêt pour de nouveaux fichiers'
-                job_status['current_filename'] = ''
-                log_message("✅ File d'attente terminée - Prêt pour de nouveaux fichiers")
+                current_status['state'] = 'idle'
+                current_status['current_step'] = 'Prêt pour de nouveaux fichiers'
+                current_status['current_filename'] = ''
+                log_message("✅ File d'attente terminée - Prêt pour de nouveaux fichiers", session_id)
                 
         except Exception as e:
             print(f"Worker Error: {e}")
             log_message(f"Erreur Worker: {e}")
-            job_status['state'] = 'idle'  # Reset on error too
 
 # Start worker thread
 worker_thread = threading.Thread(target=worker, daemon=True)
@@ -1070,14 +1118,15 @@ def restore_queue():
 restore_queue()
 
 # Modified process function for SINGLE track
-def process_single_track(filepath, filename):
-    global job_status
+def process_single_track(filepath, filename, session_id='global'):
+    # Get session-specific status
+    current_status = get_job_status(session_id)
     
     try:
-        job_status['state'] = 'processing'
-        job_status['current_filename'] = filename
-        job_status['current_step'] = "Séparation IA (Demucs)..."
-        log_message(f"🚀 Début traitement : {filename}")
+        current_status['state'] = 'processing'
+        current_status['current_filename'] = filename
+        current_status['current_step'] = "Séparation IA (Demucs)..."
+        log_message(f"🚀 [{session_id}] Début traitement : {filename}", session_id)
         
         track_name = os.path.splitext(filename)[0]
         
@@ -1120,7 +1169,7 @@ def process_single_track(filepath, filename):
                             p_match = re.search(r'(\d+)$', percent_part)
                             if p_match:
                                 track_percent = int(p_match.group(1))
-                                job_status['progress'] = int(track_percent * 0.7)
+                                current_status['progress'] = int(track_percent * 0.7)
                     except:
                         pass
             
@@ -1144,8 +1193,8 @@ def process_single_track(filepath, filename):
             return
         
         # 2. Generate edits (Main, Acapella, Instrumental)
-        job_status['current_step'] = "Génération des versions..."
-        job_status['progress'] = 70
+        current_status['current_step'] = "Génération des versions..."
+        current_status['progress'] = 70
         
         clean_name, _ = clean_filename(filename)
         track_output_dir = os.path.join(PROCESSED_FOLDER, clean_name)
@@ -1159,48 +1208,53 @@ def process_single_track(filepath, filename):
         if os.path.exists(inst_path) and os.path.exists(vocals_path):
             edits = create_edits(vocals_path, inst_path, filepath, track_output_dir, filename)
             
-            # Add to results
-            job_status['results'].append({
+            # Add to session-specific results
+            current_status['results'].append({
                 'original': clean_name,
                 'edits': edits
             })
-            log_message(f"✅ Terminé : {clean_name}")
+            log_message(f"✅ [{session_id}] Terminé : {clean_name}", session_id)
         else:
-            log_message(f"⚠️ Fichiers séparés non trouvés pour {filename}")
+            log_message(f"⚠️ Fichiers séparés non trouvés pour {filename}", session_id)
         
-        job_status['progress'] = 100
+        current_status['progress'] = 100
 
     except Exception as e:
-        log_message(f"❌ Erreur critique {filename}: {e}")
+        log_message(f"❌ Erreur critique {filename}: {e}", session_id)
 
 @app.route('/clear_results', methods=['POST'])
 def clear_results():
-    """Clears only the results list (keeps files on disk)."""
-    global job_status
-    job_status['results'] = []
-    job_status['logs'] = []
-    log_message("🔄 Résultats vidés - prêt pour nouveaux tracks")
-    return jsonify({'message': 'Results cleared'})
+    """Clears only the results list for current session (keeps files on disk)."""
+    session_id = get_session_id()
+    current_status = get_job_status(session_id)
+    current_status['results'] = []
+    current_status['logs'] = []
+    log_message("🔄 Résultats vidés - prêt pour nouveaux tracks", session_id)
+    return jsonify({'message': 'Results cleared', 'session_id': session_id})
 
 @app.route('/enqueue_file', methods=['POST'])
 def enqueue_file():
     data = request.json
     filename = data.get('filename')
+    session_id = get_session_id()
     
     if filename:
-        track_queue.put(filename)
+        # Queue item includes session_id for multi-user support
+        track_queue.put({'filename': filename, 'session_id': session_id})
         q_size = track_queue.qsize()
-        log_message(f"📥 Ajouté à la file : {filename} (File d'attente: {q_size})")
-        return jsonify({'message': 'Queued', 'queue_size': q_size})
+        log_message(f"📥 [{session_id}] Ajouté à la file : {filename} (File d'attente: {q_size})", session_id)
+        return jsonify({'message': 'Queued', 'queue_size': q_size, 'session_id': session_id})
     
     return jsonify({'error': 'No filename'}), 400
 
 @app.route('/upload_chunk', methods=['POST'])
 def upload_chunk():
     """
-    Receives a single file upload and saves it to the upload folder.
-    This allows the frontend to sequence uploads 1 by 1.
+    Receives a single file upload and saves it to session-specific folder.
+    Supports multiple users uploading simultaneously.
     """
+    session_id = get_session_id()
+    
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
         
@@ -1211,9 +1265,12 @@ def upload_chunk():
         
     if file:
         filename = file.filename
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # Use session-specific upload folder
+        session_upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+        os.makedirs(session_upload_folder, exist_ok=True)
+        filepath = os.path.join(session_upload_folder, filename)
         file.save(filepath)
-        return jsonify({'message': f'File {filename} uploaded successfully'})
+        return jsonify({'message': f'File {filename} uploaded successfully', 'session_id': session_id})
 
 @app.route('/start_processing', methods=['POST'])
 def start_processing():
@@ -1263,57 +1320,15 @@ def upload_file():
 
 @app.route('/status')
 def status():
-    # Update queue info in status
-    job_status['queue_size'] = track_queue.qsize()
+    # Get session-specific status
+    session_id = request.args.get('session_id') or get_session_id()
+    current_status = get_job_status(session_id)
     
-    # DON'T auto-populate from disk - only show current session's results
-    # This prevents old tracks from appearing after cleanup
-    if False and not job_status['results']:  # DISABLED
-        processed_dirs = [d for d in os.listdir(PROCESSED_FOLDER) if os.path.isdir(os.path.join(PROCESSED_FOLDER, d))]
-        for d in processed_dirs:
-            # Reconstruct result object
-            track_dir = os.path.join(PROCESSED_FOLDER, d)
-            files = [f for f in os.listdir(track_dir) if f.endswith(('.mp3', '.wav'))]
-            
-            # Simple reconstruction of edits list
-            edits = []
-            for f in files:
-                ext = 'mp3' if f.endswith('.mp3') else 'wav'
-                # Try to guess edit type from filename suffix? 
-                # Not strictly necessary for display, just name and URL needed.
-                # Filename: "Track Name Suffix.mp3"
-                
-                subdir = d
-                url = f"/download_processed/{urllib.parse.quote(subdir)}/{urllib.parse.quote(f)}"
-                
-                # We only want one entry per edit type (MP3/WAV pair ideally), 
-                # but for simple display list, we can group them in UI or just send raw.
-                # The UI expects objects with {name, mp3, wav}.
-                pass 
-            
-            # Better approach: Group by name (without extension)
-            grouped = {}
-            for f in files:
-                name_no_ext = os.path.splitext(f)[0]
-                if name_no_ext not in grouped:
-                    grouped[name_no_ext] = {'name': name_no_ext, 'mp3': '#', 'wav': '#'}
-                
-                subdir = d
-                # New robust URL format - safe='/' to keep slashes!
-                rel_path = f"{subdir}/{f}"
-                url = f"/download_file?path={urllib.parse.quote(rel_path, safe='/')}"
-                
-                if f.endswith('.mp3'):
-                    grouped[name_no_ext]['mp3'] = url
-                else:
-                    grouped[name_no_ext]['wav'] = url
-            
-            job_status['results'].append({
-                'original': d,
-                'edits': list(grouped.values())
-            })
-            
-    return jsonify(job_status)
+    # Update queue info
+    current_status['queue_size'] = track_queue.qsize()
+    
+    # Return session-specific status
+    return jsonify(current_status)
 
 @app.route('/download_file')
 def download_file():
