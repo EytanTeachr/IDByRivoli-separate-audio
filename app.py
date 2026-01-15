@@ -437,14 +437,22 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         
         # 9. Publisher (keep original as-is) + Label (parent category)
         original_publisher = ''
-        if original_tags and 'TPUB' in original_tags:
-            original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+        print(f"   🔍 DEBUG: original_tags existe? {original_tags is not None}")
+        if original_tags:
+            print(f"   🔍 DEBUG: Clés tags: {[k for k in original_tags.keys() if k.startswith('T')]}")
+            if 'TPUB' in original_tags:
+                original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+                print(f"   🔍 DEBUG: TPUB trouvé = '{original_publisher}'")
+            else:
+                print(f"   ⚠️ DEBUG: TPUB absent du fichier original")
         
         print(f"   🔍 DEBUG: original_path = {original_path}")
+        print(f"   🔍 DEBUG: Fichier existe? {os.path.exists(original_path)}")
         print(f"   🔍 DEBUG: TPUB lu du fichier original = '{original_publisher}'")
         
         if original_publisher:
             # Keep original publisher in TPUB (unchanged!)
+            print(f"   ✅ AJOUT TPUB = '{original_publisher}' (valeur originale)")
             tags.add(TPUB(encoding=3, text=original_publisher))
             
             # Get parent label (Warner/Sony/Universal)
