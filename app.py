@@ -723,12 +723,17 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         except:
             date_sortie = 0
         
-        # Publisher/Label (map sub-labels to parent labels)
-        original_label = ''
+        # Publisher/Label: original goes to Sous-label, mapped goes to Label
+        sous_label = ''  # Original publisher from file
+        parent_label = ''  # Mapped parent label
         if 'TPUB' in original_tags and original_tags['TPUB'].text:
-            original_label = str(original_tags['TPUB'].text[0]).strip()
-        # Apply label mapping
-        label = get_parent_label(original_label) if original_label else ''
+            sous_label = str(original_tags['TPUB'].text[0]).strip()
+            # Map sub-label to parent label
+            parent_label = get_parent_label(sous_label) if sous_label else ''
+            # If mapping didn't change it (not in our list), parent_label = sous_label
+            # In that case, we don't have a parent, so leave Label empty
+            if parent_label == sous_label:
+                parent_label = ''  # No known parent for this sub-label
         
         # Construct ABSOLUTE URLs using DYNAMIC BASE URL
         relative_url = edit_info.get('url', '')
@@ -787,6 +792,8 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
         track_id = f"{isrc}_{filename_clean}" if isrc else filename_clean
         
         # Prepare data structure
+        # Label = parent label (Universal, Sony, Warner, Alfred) if sub-label is recognized
+        # Sous-label = original publisher from file
         track_data = {
             'Type': edit_info.get('type', ''),
             'Format': edit_info.get('format', 'MP3'),
@@ -797,8 +804,8 @@ def prepare_track_metadata(edit_info, original_path, bpm, base_url=""):
             'Mood': '',
             'Style': genre,
             'Album': album,
-            'Label': 'ID By Rivoli',
-            'Sous-label': label if label != 'ID By Rivoli' else '',
+            'Label': parent_label,  # Mapped parent label (or empty if not recognized)
+            'Sous-label': sous_label,  # Original publisher from file
             'Date de sortie': date_sortie,
             'BPM': bpm if bpm is not None else 0,
             'Artiste original': artist,
