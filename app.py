@@ -245,7 +245,8 @@ def format_artists(artist_string):
     # Normalize separators - replace common separators with a standard one
     # Replace "feat.", "ft.", "Feat.", "Ft." with separator
     normalized = re.sub(r'\s*(?:feat\.?|ft\.?|Feat\.?|Ft\.?)\s*', '|||', normalized, flags=re.IGNORECASE)
-    # Replace " / ", "/", " & ", " and ", ";" with separator
+    # Replace "|", " / ", "/", " & ", " and ", ";" with separator
+    normalized = re.sub(r'\s*\|\s*', '|||', normalized)  # Pipe separator
     normalized = re.sub(r'\s*/\s*', '|||', normalized)
     normalized = re.sub(r'\s*;\s*', '|||', normalized)
     normalized = re.sub(r'\s+&\s+', '|||', normalized)
