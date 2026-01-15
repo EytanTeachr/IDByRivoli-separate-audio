@@ -508,6 +508,14 @@ def update_metadata(filepath, artist, title, original_path, bpm):
         # Save both ID3v2.3 and ID3v1.1 tags together (preserves all tags including covers)
         tags.save(filepath, v1=2, v2_version=3)  # v1=2 writes ID3v1.1, v2_version=3 writes ID3v2.3
         
+        # VERIFICATION: Read back the file to confirm metadata was saved correctly
+        verify_audio = MP3(filepath, ID3=ID3)
+        verify_tpub = ''
+        if verify_audio.tags and 'TPUB' in verify_audio.tags:
+            verify_tpub = str(verify_audio.tags['TPUB'].text[0]) if verify_audio.tags['TPUB'].text else ''
+        print(f"   ✅ MP3 sauvegardé: {os.path.basename(filepath)}")
+        print(f"   🔍 VERIFICATION TPUB dans fichier = '{verify_tpub}'")
+        
     except Exception as e:
         print(f"Error updating metadata for {filepath}: {e}")
 
@@ -571,17 +579,23 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         
         # 9. Publisher (keep original as-is) + Label (parent category)
         original_publisher = ''
+        print(f"   🔍 WAV DEBUG: original_tags existe? {original_tags is not None}")
         if original_tags and 'TPUB' in original_tags:
             original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+            print(f"   🔍 WAV DEBUG: TPUB original = '{original_publisher}'")
+        else:
+            print(f"   ⚠️ WAV DEBUG: TPUB absent du fichier original")
         
         if original_publisher:
             # Keep original publisher in TPUB
+            print(f"   ✅ WAV AJOUT TPUB = '{original_publisher}'")
             audio.tags.add(TPUB(encoding=3, text=original_publisher))
             
             # Get parent label (Warner/Sony/Universal)
             parent_label = get_parent_label(original_publisher)
             # Only add Label if it's different from publisher (meaning it was mapped)
             if parent_label != original_publisher:
+                print(f"   ✅ WAV AJOUT LABEL = '{parent_label}'")
                 audio.tags.add(TXXX(encoding=3, desc='LABEL', text=parent_label))
         
         # 10. Custom Track ID
@@ -612,7 +626,15 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
         
         # Save properly embedded in WAV structure
         audio.save()
-        print(f"   ✅ WAV metadata complet: {os.path.basename(filepath)}")
+        
+        # VERIFICATION: Read back the file to confirm metadata was saved correctly
+        from mutagen.wave import WAVE as WAVE_VERIFY
+        verify_audio = WAVE_VERIFY(filepath)
+        verify_tpub = ''
+        if verify_audio.tags and 'TPUB' in verify_audio.tags:
+            verify_tpub = str(verify_audio.tags['TPUB'].text[0]) if verify_audio.tags['TPUB'].text else ''
+        print(f"   ✅ WAV sauvegardé: {os.path.basename(filepath)}")
+        print(f"   🔍 WAV VERIFICATION TPUB = '{verify_tpub}'")
         
     except Exception as e:
         print(f"   ⚠️ WAV metadata error: {e}")
