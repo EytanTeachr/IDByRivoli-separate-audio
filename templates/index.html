@@ -663,6 +663,10 @@
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressFill').textContent = '';
             
+            // Reset status text
+            document.getElementById('statusText').textContent = 'Prêt pour un nouvel upload';
+            document.getElementById('statusText').style.color = '#888';
+            
             // Clear file list for new batch
             selectedFiles = [];
             updateFileList();
