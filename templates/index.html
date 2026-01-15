@@ -633,20 +633,43 @@
                         clearInterval(pollingInterval);
                         progressFill.style.width = '100%';
                         progressFill.textContent = '100%';
-                        statusText.textContent = "Terminé !";
+                        statusText.textContent = "Terminé ! Vous pouvez uploader de nouveaux fichiers.";
                         displayResults(status.results);
-                        document.getElementById('submitBtn').disabled = false;
+                        resetForNewUpload();
+                    }
+                    else if (status.state === 'idle' && status.results && status.results.length > 0) {
+                        // Processing done, show results and allow new upload
+                        displayResults(status.results);
+                        statusText.textContent = "Prêt pour de nouveaux fichiers.";
+                        resetForNewUpload();
                     }
                     else if (status.state === 'error') {
                         clearInterval(pollingInterval);
                         statusText.textContent = "Erreur : " + status.error;
                         statusText.style.color = 'red';
-                        document.getElementById('submitBtn').disabled = false;
+                        resetForNewUpload();
                     }
                 } catch (e) {
                     console.error("Polling error", e);
                 }
             }, 1000);
+        }
+
+        function resetForNewUpload() {
+            // Re-enable submit button
+            document.getElementById('submitBtn').disabled = false;
+            
+            // Reset progress bar
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('progressFill').textContent = '';
+            
+            // Clear file list for new batch
+            selectedFiles = [];
+            updateFileList();
+            
+            // Reset file inputs
+            document.getElementById('fileInput').value = '';
+            document.getElementById('folderInput').value = '';
         }
 
         function displayResults(results) {
