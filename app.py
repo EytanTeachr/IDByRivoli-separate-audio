@@ -333,8 +333,8 @@ LABEL_MAPPINGS = {
         'Warner Chappell Scandinavia',
         'Warner Chappell Latin America',
         'Warner Chappell Asia',
-    ],
-    'Alfred Music Publishing': [
+        # Ex-Alfred Music Publishing (now part of Warner)
+        'Alfred Music Publishing',
         'Faber Music',
         'Imagem Music Group',
         'Boosey & Hawkes',
@@ -435,18 +435,25 @@ def update_metadata(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher/Label (map sub-labels to parent labels, leave empty if none)
+        # 9. Publisher (keep original as-is) + Label (parent category)
+        original_publisher = ''
         if original_tags and 'TPUB' in original_tags:
-            original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
-            if original_label:
-                # Map sub-label to parent label if applicable
-                mapped_label = get_parent_label(original_label)
-                tags.add(TPUB(encoding=3, text=mapped_label))
-                print(f"   📋 Publisher: '{original_label}' → '{mapped_label}'")
+            original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+        
+        if original_publisher:
+            # Keep original publisher in TPUB
+            tags.add(TPUB(encoding=3, text=original_publisher))
+            
+            # Get parent label (Warner/Sony/Universal)
+            parent_label = get_parent_label(original_publisher)
+            # Only add Label if it's different from publisher (meaning it was mapped)
+            if parent_label != original_publisher:
+                tags.add(TXXX(encoding=3, desc='LABEL', text=parent_label))
+                print(f"   📋 Publisher: '{original_publisher}' | Label: '{parent_label}'")
             else:
-                print(f"   📋 Publisher: (vide dans l'original)")
+                print(f"   📋 Publisher: '{original_publisher}' | Label: (non reconnu)")
         else:
-            print(f"   📋 Publisher: (pas de TPUB dans l'original)")
+            print(f"   📋 Publisher: (vide)")
         
         # 10. Custom Track ID: $ISRC_$filename (clean format: no dashes, single underscores only)
         # Extract clean filename (without path and extension)
@@ -549,13 +556,20 @@ def update_metadata_wav(filepath, artist, title, original_path, bpm):
             isrc_value = str(original_tags['TSRC'].text[0]) if original_tags['TSRC'].text else ''
             audio.tags.add(TSRC(encoding=3, text=isrc_value))
         
-        # 9. Publisher/Label (map sub-labels to parent labels)
+        # 9. Publisher (keep original as-is) + Label (parent category)
+        original_publisher = ''
         if original_tags and 'TPUB' in original_tags:
-            original_label = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
-            if original_label:
-                # Map sub-label to parent label if applicable
-                mapped_label = get_parent_label(original_label)
-                audio.tags.add(TPUB(encoding=3, text=mapped_label))
+            original_publisher = str(original_tags['TPUB'].text[0]).strip() if original_tags['TPUB'].text else ''
+        
+        if original_publisher:
+            # Keep original publisher in TPUB
+            audio.tags.add(TPUB(encoding=3, text=original_publisher))
+            
+            # Get parent label (Warner/Sony/Universal)
+            parent_label = get_parent_label(original_publisher)
+            # Only add Label if it's different from publisher (meaning it was mapped)
+            if parent_label != original_publisher:
+                audio.tags.add(TXXX(encoding=3, desc='LABEL', text=parent_label))
         
         # 10. Custom Track ID
         filename_base = os.path.splitext(os.path.basename(filepath))[0]
