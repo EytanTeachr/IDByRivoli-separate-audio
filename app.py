@@ -1132,6 +1132,15 @@ def process_single_track(filepath, filename):
     except Exception as e:
         log_message(f"❌ Erreur critique {filename}: {e}")
 
+@app.route('/clear_results', methods=['POST'])
+def clear_results():
+    """Clears only the results list (keeps files on disk)."""
+    global job_status
+    job_status['results'] = []
+    job_status['logs'] = []
+    log_message("🔄 Résultats vidés - prêt pour nouveaux tracks")
+    return jsonify({'message': 'Results cleared'})
+
 @app.route('/enqueue_file', methods=['POST'])
 def enqueue_file():
     data = request.json
@@ -1216,8 +1225,9 @@ def status():
     # Update queue info in status
     job_status['queue_size'] = track_queue.qsize()
     
-    # If results are empty (e.g. after restart), populate them from disk
-    if not job_status['results']:
+    # DON'T auto-populate from disk - only show current session's results
+    # This prevents old tracks from appearing after cleanup
+    if False and not job_status['results']:  # DISABLED
         processed_dirs = [d for d in os.listdir(PROCESSED_FOLDER) if os.path.isdir(os.path.join(PROCESSED_FOLDER, d))]
         for d in processed_dirs:
             # Reconstruct result object
@@ -1426,8 +1436,9 @@ def test_download():
 def cleanup_files():
     """
     Deletes all files in uploads, output, and processed directories to free up disk space.
+    Also clears all in-memory state to start fresh.
     """
-    global job_status
+    global job_status, processed_history
     
     try:
         # Clear directories
@@ -1441,8 +1452,18 @@ def cleanup_files():
                         shutil.rmtree(file_path)
                 except Exception as e:
                     print(f'Failed to delete {file_path}. Reason: {e}')
+        
+        # Also clear covers folder (extracted covers)
+        covers_folder = os.path.join(BASE_DIR, 'static', 'covers')
+        for filename in os.listdir(covers_folder):
+            if filename.startswith('cover_'):  # Only delete extracted covers, not the main one
+                file_path = os.path.join(covers_folder, filename)
+                try:
+                    os.unlink(file_path)
+                except:
+                    pass
 
-        # Reset Job Status
+        # Reset Job Status COMPLETELY
         job_status = {
             'state': 'idle', 
             'progress': 0,
@@ -1450,7 +1471,7 @@ def cleanup_files():
             'current_file_idx': 0,
             'current_filename': '',
             'current_step': '',
-            'results': [],
+            'results': [],  # IMPORTANT: Clear results
             'error': None,
             'logs': [],
             'queue_size': 0
@@ -1460,12 +1481,15 @@ def cleanup_files():
         with track_queue.mutex:
             track_queue.queue.clear()
             
-        # Clear History
+        # Clear History file
         if os.path.exists(HISTORY_FILE):
             os.remove(HISTORY_FILE)
+        
+        # Reset in-memory history
+        processed_history = []
             
-        log_message("🧹 Espace disque et historique nettoyés avec succès.")
-        return jsonify({'message': 'Cleanup successful'})
+        print("🧹 FULL RESET: All files, results, and history cleared")
+        return jsonify({'message': 'Cleanup successful', 'results_cleared': True})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
