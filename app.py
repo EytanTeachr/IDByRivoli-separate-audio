@@ -934,10 +934,11 @@ def create_edits(vocals_path, inst_path, original_path, base_output_path, base_f
             audio_segment.export(out_path_wav, format="wav")
             update_metadata_wav(out_path_wav, "ID By Rivoli", metadata_title, original_path, bpm)
         
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            executor.submit(export_mp3)
-            executor.submit(export_wav)
-            executor.shutdown(wait=True)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Export both formats in parallel
+            futures = [executor.submit(export_mp3), executor.submit(export_wav)]
+            for f in futures:
+                f.result()  # Wait for completion
         
         # Use base_name (from metadata) for subdirectory and URLs
         subdir = base_name
@@ -1091,7 +1092,7 @@ def run_demucs_thread(filepaths, original_filenames):
                 '-n', 'htdemucs',
                 '--mp3',
                 '--mp3-bitrate', '320',
-                '-j', '8',                    # More parallel jobs
+                '-j', str(max(4, CPU_COUNT)),  # Use all CPUs for Demucs jobs
                 '--segment', '7',             # Max for htdemucs is 7.8
                 '--device', DEMUCS_DEVICE,    # GPU/CPU auto-detection
                 '-o', OUTPUT_FOLDER
@@ -1178,17 +1179,15 @@ def run_demucs_thread(filepaths, original_filenames):
         job_status['current_step'] = "Génération des Edits"
         
         all_results = []
+        results_lock = threading.Lock()
+        completed_count = [0]  # Use list for mutable in closure
         
-        for i, filepath in enumerate(filepaths):
+        def process_single_edit(filepath):
+            """Process a single track's edits - can run in parallel"""
             filename = os.path.basename(filepath)
-            
-            # Update status for current file
-            job_status['current_file_idx'] = i + 1
-            job_status['current_filename'] = filename
-            job_status['current_step'] = "Création des versions DJ (Edits)"
-            log_message(f"Création des edits pour : {filename}")
-            
             track_name = os.path.splitext(filename)[0]
+            
+            log_message(f"🔄 Création des edits pour : {filename}")
             
             source_dir = os.path.join(OUTPUT_FOLDER, 'htdemucs', track_name)
             inst_path = os.path.join(source_dir, 'no_vocals.mp3')
@@ -1201,14 +1200,30 @@ def run_demucs_thread(filepaths, original_filenames):
                 
                 edits = create_edits(vocals_path, inst_path, filepath, track_output_dir, filename)
                 
-                all_results.append({
-                    'original': clean_name,
-                    'edits': edits
-                })
-                
-                job_status['progress'] = 50 + int((i + 1) / len(filepaths) * 50)
+                with results_lock:
+                    all_results.append({
+                        'original': clean_name,
+                        'edits': edits
+                    })
+                    completed_count[0] += 1
+                    job_status['progress'] = 50 + int(completed_count[0] / len(filepaths) * 50)
+                    job_status['current_filename'] = f"{completed_count[0]}/{len(filepaths)} terminés"
             else:
                 print(f"Warning: Output files not found for {track_name}")
+        
+        # Process edits in parallel using ThreadPoolExecutor
+        # Use half the CPU count to avoid overwhelming memory
+        edit_workers = max(2, min(4, CPU_COUNT // 2))
+        print(f"🚀 Génération des edits avec {edit_workers} workers parallèles")
+        
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=edit_workers) as executor:
+            futures = [executor.submit(process_single_edit, fp) for fp in filepaths]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Edit generation error: {e}")
 
         job_status['progress'] = 100
         job_status['results'] = all_results
@@ -1248,11 +1263,19 @@ import json
 
 # No duplicate checking - all tracks are processed fresh each time
 
+# Auto-detect optimal number of workers based on CPU/GPU
+import multiprocessing
+CPU_COUNT = multiprocessing.cpu_count()
+# Use half of CPU cores for workers (each worker uses resources for Demucs + export)
+# Minimum 2, maximum 8 to avoid overwhelming the system
+NUM_WORKERS = max(2, min(8, CPU_COUNT // 2))
+print(f"🔧 Configuration: {CPU_COUNT} CPUs détectés → {NUM_WORKERS} workers parallèles")
+
 # Global Queue for processing tracks
 track_queue = queue.Queue()
 
 # Worker thread function
-def worker():
+def worker(worker_id):
     while True:
         try:
             queue_item = track_queue.get()
@@ -1288,6 +1311,7 @@ def worker():
                     current_status['current_filename'] = ''
                 continue
 
+            print(f"🔄 Worker {worker_id} traite: {filename}")
             process_single_track(filepath, filename, session_id)
             
             track_queue.task_done()
@@ -1300,12 +1324,16 @@ def worker():
                 log_message("✅ File d'attente terminée - Prêt pour de nouveaux fichiers", session_id)
                 
         except Exception as e:
-            print(f"Worker Error: {e}")
-            log_message(f"Erreur Worker: {e}")
+            print(f"Worker {worker_id} Error: {e}")
+            log_message(f"Erreur Worker {worker_id}: {e}")
 
-# Start worker thread
-worker_thread = threading.Thread(target=worker, daemon=True)
-worker_thread.start()
+# Start multiple worker threads
+worker_threads = []
+for i in range(NUM_WORKERS):
+    t = threading.Thread(target=worker, args=(i+1,), daemon=True)
+    t.start()
+    worker_threads.append(t)
+print(f"🚀 {NUM_WORKERS} workers démarrés")
 
 # Restore pending files on startup
 def restore_queue():
