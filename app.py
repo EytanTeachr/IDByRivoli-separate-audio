@@ -1171,16 +1171,14 @@ worker_thread.start()
 
 # Restore pending files on startup
 def restore_queue():
-    """Scans upload folder and re-queues files that haven't been processed yet."""
+    """Scans upload folder and re-queues any MP3 files found."""
     log_message("🔄 Vérification des fichiers en attente...")
     upload_files = [f for f in os.listdir(UPLOAD_FOLDER) if f.lower().endswith('.mp3')]
-    history = load_history()
     
     count = 0
     for f in upload_files:
-        if f not in history:
-            track_queue.put(f)
-            count += 1
+        track_queue.put(f)
+        count += 1
             
     if count > 0:
         log_message(f"♻️ Restauration de {count} fichiers dans la file d'attente.")
